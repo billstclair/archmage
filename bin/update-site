@@ -1,0 +1,7 @@
+#!/bin/bash
+
+elm make src/Archmage.elm --output site/index.js
+cd site
+rsyncit
+
+
