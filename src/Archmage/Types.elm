@@ -9,7 +9,7 @@
 --
 ----------------------------------------------------------------------
 
-module Archmage.Types exposing ( Page(..), Msg(..), Board, Node
+module Archmage.Types exposing ( Page(..), Msg(..), Piece, Board, Node
                                , Point, Sizes, RenderInfo
                                , Color(..), MovedStone(..), NodeClassification(..)
                                , Move(..), Turn, History, newTurn
@@ -71,6 +71,20 @@ type Msg
     | ReceiveServerUrl (Result Http.Error String)
     | Tick Time
     | Noop
+
+type Piece
+  = HandPiece
+  | CupPiece
+  | SwordPiece
+  | WandPiece
+  | TowerPiece
+  | MoonPiece
+  | MagePiece
+
+type alias ColoredPiece =
+  { color : Color
+  , piece : Piece
+  }
 
 type alias Board =
     Dict String Node
