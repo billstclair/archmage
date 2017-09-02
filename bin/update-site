@@ -1,6 +1,6 @@
 #!/bin/bash
 
-elm make src/Archmage.elm --output site/index.js
+elm make src/DrawPieces.elm --output site/index.html
 cd site
 rsyncit
 

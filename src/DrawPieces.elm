@@ -14,8 +14,8 @@ module DrawPieces exposing (..)
 import Archmage.Types as Types exposing ( Piece(..), Color(..) )
 import Archmage.Pieces exposing ( drawPiece )
 
-import Html exposing ( Html, Attribute , div, h2, text )
-import Html.Attributes exposing ( align )
+import Html exposing ( Html, Attribute , div, h2, text, img )
+import Html.Attributes exposing ( align, src )
 import Svg exposing ( Svg, svg, g, rect )
 import Svg.Attributes exposing ( x, y, width, height, stroke, strokeWidth, fillOpacity )
 
@@ -45,7 +45,7 @@ update msg model =
 
 pieceSize : Int
 pieceSize =
-    100
+    140
 
 pieceCount : Int
 pieceCount =
@@ -83,6 +83,10 @@ onePiece row col piece =
             , drawPiece piece color (ix+1) (iy+1) (pieceSize-2)
             ]
 
+br : Html Msg
+br =
+    Html.br [][]
+
 view : Model -> Html Msg
 view model =
     div
@@ -99,4 +103,7 @@ view model =
               <| List.append
                   (List.map2 (onePiece 0) indices pieces)
                   (List.map2 (onePiece 1) indices pieces)
+        , br
+        , img [ src "docs/pieces.jpg" ]
+            []
         ]
