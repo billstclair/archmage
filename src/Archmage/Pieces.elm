@@ -22,6 +22,8 @@ import Svg.Attributes exposing ( x, y, width, height
                                , fillOpacity, opacity
                                )
 
+import Char
+
 colorString : Color -> String
 colorString color =
     case color of
@@ -65,36 +67,6 @@ drawCircle color centerx centery radius =
                    ]
             []
 
-type alias PathElement number =
-    { letter : String
-    , numbers : List number
-    }
-
-type alias PathSpec number =
-    List (PathElement number)
-
-scaleInt : Float -> Int -> String
-scaleInt f n =
-    toString <| f * (toFloat n)
-
-scalePathElement : Float -> PathElement Int -> PathElement String
-scalePathElement scale element =
-    { letter = element.letter
-    , numbers = List.map (scaleInt scale) element.numbers
-    }
-
-scalePathSpec : Float -> PathSpec Int -> PathSpec String
-scalePathSpec scale spec =
-    List.map (scalePathElement scale) spec    
-
-pathElementToString : PathElement String -> String
-pathElementToString element =
-    element.letter ++ String.join " " element.numbers
-
-pathSpecToString : PathSpec String -> String
-pathSpecToString spec =
-    String.join " " <| List.map pathElementToString spec
-
 drawCup : Color -> Int -> Int -> Int -> Svg msg
 drawCup color centerx centery radius =
     let (f, o) = fillAndOpacity color
@@ -137,16 +109,110 @@ drawCup color centerx centery radius =
                 []
             ]
 
+type alias IntPair =
+    (Int, Int)
+
+type alias FloatPair =
+    (Float, Float)
+
+type alias StringPair =
+    (String, String)
+
+type alias PathElement number =
+    (Char, List (number, number))
+
+type alias PathSpec number =
+    List (PathElement number)
+
+scaleInt : Float -> Float -> Int -> String
+scaleInt offset scale n =
+    toString <| scale * ((toFloat n) + offset)
+
+scaleIntPair : FloatPair -> Float -> IntPair -> StringPair
+scaleIntPair offset scale n =
+    let (ox, oy) = offset
+        (nx, ny) = n
+    in
+        (scaleInt ox scale nx, scaleInt oy scale ny)
+
+scalePathElement : FloatPair -> Float -> PathElement Int -> PathElement String
+scalePathElement offset scale element =
+    let (letter, pairs) = element
+        off = if Char.isLower letter then
+                  (0, 0)        --don't offset relative path elements
+              else
+                  offset
+    in
+        (letter, List.map (scaleIntPair off scale) pairs)
+
+scalePathSpec : FloatPair -> Float -> PathSpec Int -> PathSpec String
+scalePathSpec offset scale spec =
+    List.map (scalePathElement offset scale) spec    
+
+type alias PathSize =
+    (Int, Int)
+
+normalizePathSpec : Int -> PathSize -> PathSpec Int -> PathSpec String
+normalizePathSpec size pathSize spec =
+    let (sx, sy) = pathSize
+        fsx = toFloat sx
+        fsy = toFloat sy
+        fps = toFloat (max sx sy)
+        offset = if sx < sy then
+                     ((fsy - fsx) / 2.0, 0.0)
+                 else
+                     (0.0, (fsx - fsy) / 2.0)
+        scale = (toFloat size) / fps
+    in
+        scalePathSpec offset scale spec
+
+pairToString : StringPair -> String
+pairToString pair =
+    let (px, py) = pair
+    in
+        px ++ "," ++ py
+
+pathElementToString : PathElement String -> String
+pathElementToString element =
+    let (letter, pairs) = element
+    in
+        (String.fromChar letter) ++
+            String.join " " (List.map pairToString pairs)
+
+pathSpecToString : PathSpec String -> String
+pathSpecToString spec =
+    String.join " " <| List.map pathElementToString spec
+
 {-
 <!-- Generated with http://jxnblk.com/paths -->
 <svg
   xmlns='http://www.w3.org/2000/svg'
-  viewBox='0 0 64 64'
-  width='64' height='64'
+  viewBox='0 0 32 58'
+  width='32' height='58'
   fill='currentcolor'>
   <path d='M 0,54 l 0,-20 q 5,-22 8,-2 q 3,-45 6,0 q 4,-60 8,0 l 0,-2 q 3,-46 6,2 q 2,-26 4,-2 l 0,22 l -4,6 l -10,0 Z' />
 </svg>
 -}
+handPath : PathSpec Int
+handPath =
+    [ ('M', [(0,54)])
+    , ('l', [(0,-20)])
+    , ('q', [(5,-22), (8,-2)])
+    , ('q', [(3,-45), (6,0)])
+    , ('q', [(4,-60), (8,0)])
+    , ('l', [(0,-2)])
+    , ('q', [(3,-46), (6,2)])
+    , ('q', [(2,-26), (4,-2)])
+    , ('l', [(0,22)])
+    , ('l', [(-4,6)])
+    , ('l', [(-10,0)])
+    , ('Z', [])
+    ]
+
+handSize : PathSize
+handSize =
+    (32, 58)
+
 drawHand: Color -> Int -> Int -> Int -> Svg msg
 drawHand color centerx centery radius =
     drawCircle color centerx centery radius
