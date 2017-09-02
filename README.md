@@ -1,4 +1,4 @@
-The game of Arch Mage
+The game of Archmage
 
 Invented by Chris St. Clair.
 
