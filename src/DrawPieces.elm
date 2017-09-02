@@ -14,8 +14,8 @@ module DrawPieces exposing (..)
 import Archmage.Types as Types exposing ( Piece(..), Color(..) )
 import Archmage.Pieces exposing ( drawPiece )
 
-import Html exposing ( Html, Attribute , div, h2, text, img )
-import Html.Attributes exposing ( align, src )
+import Html exposing ( Html, Attribute , div, h2, text, img, p, a )
+import Html.Attributes exposing ( align, src, href, target )
 import Svg exposing ( Svg, svg, g, rect )
 import Svg.Attributes exposing ( x, y, width, height, stroke, strokeWidth, fillOpacity )
 
@@ -106,4 +106,25 @@ view model =
         , br
         , img [ src "docs/pieces.jpg" ]
             []
+        , p []
+            [ a [ href "https://gibgoygames.com/"
+                , target "_blank"
+                ]
+                  [ text "Gib Goy Games" ]
+            , text " "
+            , a [ href "https://github.com/billstclair/archmage"
+                , target "_blank"
+                ]
+                  [ text "GitHub" ]
+            ]
+        , p [] [ text "Invented by Chris St. Clair"
+               , br
+               , text "Coded by Bill St. Clair"
+               , br
+               , text "Made with "
+               , a [ href "http://elm-lang.org/"
+                   , target "_blank"
+                   ]
+                   [ text "Elm" ]
+               ]
         ]
