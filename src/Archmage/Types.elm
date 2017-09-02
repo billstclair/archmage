@@ -9,7 +9,7 @@
 --
 ----------------------------------------------------------------------
 
-module Archmage.Types exposing ( Page(..), Msg(..), Piece, Board, Node
+module Archmage.Types exposing ( Page(..), Msg(..), Piece(..), Board, Node
                                , Point, Sizes, RenderInfo
                                , Color(..), MovedStone(..), NodeClassification(..)
                                , Move(..), Turn, History, newTurn
