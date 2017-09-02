@@ -129,6 +129,7 @@ drawPiece piece color ix iy size =
                        , height ssize
                        , fill <| colorString color
                        , fillOpacity opacity
+                       , strokeWidth "0"
                        ]
                   []
             , pieceBody piece color centerx centery radius
