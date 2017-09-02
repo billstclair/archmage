@@ -80,7 +80,7 @@ onePiece row col piece =
                    , height size
                    ]
                   []
-            , drawPiece piece color ix iy pieceSize
+            , drawPiece piece color (ix+1) (iy+1) (pieceSize-2)
             ]
 
 view : Model -> Html Msg
