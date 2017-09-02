@@ -52,8 +52,8 @@ fillAndOpacity color =
         , bodyOpacity otherColor
         )
 
-circlePiece : Color -> Int -> Int -> Int -> Svg msg
-circlePiece color centerx centery radius =
+drawCircle : Color -> Int -> Int -> Int -> Svg msg
+drawCircle color centerx centery radius =
     let (f, o) = fillAndOpacity color
         sr = round ((toFloat radius) * 0.8)
     in
@@ -65,8 +65,38 @@ circlePiece color centerx centery radius =
                    ]
             []
 
-cupPiece : Color -> Int -> Int -> Int -> Svg msg
-cupPiece color centerx centery radius =
+type alias PathElement number =
+    { letter : String
+    , numbers : List number
+    }
+
+type alias PathSpec number =
+    List (PathElement number)
+
+scaleInt : Float -> Int -> String
+scaleInt f n =
+    toString <| f * (toFloat n)
+
+scalePathElement : Float -> PathElement Int -> PathElement String
+scalePathElement scale element =
+    { letter = element.letter
+    , numbers = List.map (scaleInt scale) element.numbers
+    }
+
+scalePathSpec : Float -> PathSpec Int -> PathSpec String
+scalePathSpec scale spec =
+    List.map (scalePathElement scale) spec    
+
+pathElementToString : PathElement String -> String
+pathElementToString element =
+    element.letter ++ String.join " " element.numbers
+
+pathSpecToString : PathSpec String -> String
+pathSpecToString spec =
+    String.join " " <| List.map pathElementToString spec
+
+drawCup : Color -> Int -> Int -> Int -> Svg msg
+drawCup color centerx centery radius =
     let (f, o) = fillAndOpacity color
         cr = (radius * 2) // 3
         scr = toString cr
@@ -83,7 +113,7 @@ cupPiece color centerx centery radius =
                 " A " ++ scr ++ " " ++ scr ++
                 " 0 1 0 " ++
                 trx ++ " " ++ try ++
-                " L " ++ tlx ++ " " ++ tly
+                " Z"
     in
         g []
             [ path [ d paths
@@ -107,13 +137,27 @@ cupPiece color centerx centery radius =
                 []
             ]
 
+{-
+<!-- Generated with http://jxnblk.com/paths -->
+<svg
+  xmlns='http://www.w3.org/2000/svg'
+  viewBox='0 0 64 64'
+  width='64' height='64'
+  fill='currentcolor'>
+  <path d='M 0,54 l 0,-20 q 5,-22 8,-2 q 3,-45 6,0 q 4,-60 8,0 l 0,-2 q 3,-46 6,2 q 2,-26 4,-2 l 0,22 l -4,6 l -10,0 Z' />
+</svg>
+-}
+drawHand: Color -> Int -> Int -> Int -> Svg msg
+drawHand color centerx centery radius =
+    drawCircle color centerx centery radius
+
 pieceBody : Piece -> Color -> Int -> Int -> Int -> Svg msg
 pieceBody piece color centerx centery radius =
     case piece of
         CupPiece ->
-            cupPiece color centerx centery radius
+            drawCup color centerx centery radius
         _ ->
-            circlePiece color centerx centery radius
+            drawCircle color centerx centery radius
 
 drawPiece : Piece -> Color -> Int -> Int -> Int -> Svg msg
 drawPiece piece color ix iy size =
