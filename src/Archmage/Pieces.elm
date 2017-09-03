@@ -219,6 +219,21 @@ drawWand : Color -> Int -> Int -> Int -> Svg msg
 drawWand color centerx centery radius =
     drawPathD color centerx centery radius wandSize wandD
 
+towerSize : PathSize
+towerSize =
+    (32, 60)
+
+towerD : String
+towerD =
+    "M 0 60 " ++
+    "l 3 -45 l -3 -3 l 1 -12 l 5 0 l 1 5 l 4 0 l 1 -4 l 4 0 " ++
+    "l 1 4 l 4 0 l 1 -5 l 5 0 l 1 12 l -3 3 l 3 45 " ++
+    "Z"
+
+drawTower : Color -> Int -> Int -> Int -> Svg msg
+drawTower color centerx centery radius =
+    drawPathD color centerx centery radius towerSize towerD
+
 pieceBody : Piece -> Color -> Int -> Int -> Int -> Svg msg
 pieceBody piece color centerx centery radius =
     case piece of
@@ -230,6 +245,8 @@ pieceBody piece color centerx centery radius =
             drawSword color centerx centery radius
         WandPiece ->
             drawWand color centerx centery radius
+        TowerPiece ->
+            drawTower color centerx centery radius
         _ ->
             drawCircle color centerx centery radius
 
