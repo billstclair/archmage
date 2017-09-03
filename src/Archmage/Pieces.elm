@@ -221,18 +221,32 @@ drawWand color centerx centery radius =
 
 towerSize : PathSize
 towerSize =
-    (32, 60)
+    (28, 60)
 
 towerD : String
 towerD =
     "M 0 60 " ++
-    "l 3 -45 l -3 -3 l 1 -12 l 5 0 l 1 5 l 4 0 l 1 -4 l 4 0 " ++
-    "l 1 4 l 4 0 l 1 -5 l 5 0 l 1 12 l -3 3 l 3 45 " ++
+    "l 3 -45 l -3 -3 l 1 -12 l 5 0 l 1 7 l 4 0 l 1 -5 l 4 0 " ++
+    "l 1 5 l 4 0 l 1 -7 l 5 0 l 1 12 l -3 3 l 3 45 " ++
     "Z"
 
 drawTower : Color -> Int -> Int -> Int -> Svg msg
 drawTower color centerx centery radius =
     drawPathD color centerx centery radius towerSize towerD
+
+moonSize : PathSize
+moonSize =
+    (30, 60)
+
+moonD : String
+moonD =
+    "M 40 50 " ++
+    "A 30,30 0 1,1 40 10" ++
+    "A 25,25 0 1,0 40 50"
+
+drawMoon : Color -> Int -> Int -> Int -> Svg msg
+drawMoon color centerx centery radius =
+    drawPathD color centerx centery radius moonSize moonD
 
 pieceBody : Piece -> Color -> Int -> Int -> Int -> Svg msg
 pieceBody piece color centerx centery radius =
@@ -247,6 +261,8 @@ pieceBody piece color centerx centery radius =
             drawWand color centerx centery radius
         TowerPiece ->
             drawTower color centerx centery radius
+        MoonPiece ->
+            drawMoon color centerx centery radius
         _ ->
             drawCircle color centerx centery radius
 
