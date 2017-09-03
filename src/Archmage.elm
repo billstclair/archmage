@@ -13,6 +13,10 @@ module Archmage exposing (..)
 
 import Archmage.Types as Types exposing ( Piece(..), Color(..) )
 import Archmage.Pieces exposing ( drawPiece )
+import Archmage.Board exposing ( initialBoard, renderInfo, render
+                               , getNode
+                               , stringToBoard, boardToString
+                               )
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a )
 import Html.Attributes exposing ( align, src, href, target )

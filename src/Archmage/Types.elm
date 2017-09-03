@@ -10,8 +10,9 @@
 ----------------------------------------------------------------------
 
 module Archmage.Types exposing ( Page(..), Msg(..), Piece(..), Board, Node
-                               , Point, RenderInfo
+                               , Point, RenderInfo, Mode(..)
                                , Color(..)
+                               , rowLetters, zeroPoint
                                , get, set, butLast, adjoin
                                )
 
@@ -95,10 +96,8 @@ type Mode
 type alias RenderInfo =
     { cellSize : Int
     , locations : Dict String Point
-    , playerNames : (String, String)
-    , playerNumber : Maybe Int
     , mode : Mode
-    , player : Maybe Int
+    , player : Int
     }
 
 type Color
