@@ -72,8 +72,8 @@ scaleRadius : Int -> Int
 scaleRadius radius =
     (radius * 4) // 5
 
-drawCup : Color -> Int -> Int -> Int -> Svg msg
-drawCup color centerx centery radius =
+oldDrawCup : Color -> Int -> Int -> Int -> Svg msg
+oldDrawCup color centerx centery radius =
     let (f, o) = fillAndOpacity color
         cr = scaleRadius radius
         scr = toString cr
@@ -153,6 +153,23 @@ drawPathD color centerx centery radius pathSize pathD =
           , fillOpacity o
           ]
             [ drawScaledPath size pathSize pathD ]
+
+cupSize : PathSize
+cupSize =
+    (50, 60)
+
+cupD : String
+cupD =
+    "M 10,60 " ++
+    "l 0 -2 l 14 0 l 0 -23 l 2 0 l 0 23 l 14 0 l 0 2 Z" ++
+    "M 0 0 " ++
+    "l 0 10 " ++
+    "A 25,25 0 1,0 50,10 " ++
+    "l 0 -10 Z"
+
+drawCup : Color -> Int -> Int -> Int -> Svg msg
+drawCup color centerx centery radius =
+    drawPathD color centerx centery radius cupSize cupD
 
 {-
 <!-- Generated with http://jxnblk.com/paths -->
@@ -241,8 +258,8 @@ moonSize =
 moonD : String
 moonD =
     "M 40 50 " ++
-    "A 30,30 0 1,1 40 10" ++
-    "A 25,25 0 1,0 40 50"
+    "A 30,30 0 1,1 40,10" ++
+    "A 25,25 0 1,0 40,50"
 
 drawMoon : Color -> Int -> Int -> Int -> Svg msg
 drawMoon color centerx centery radius =
