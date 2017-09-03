@@ -70,7 +70,7 @@ drawCircle color centerx centery radius =
 
 scaleRadius : Int -> Int
 scaleRadius radius =
-    (radius * 3) // 4
+    (radius * 4) // 5
 
 drawCup : Color -> Int -> Int -> Int -> Svg msg
 drawCup color centerx centery radius =
@@ -190,15 +190,34 @@ swordD : String
 swordD =
     "M 5 45 " ++
     "q -6 -17 2 -45 " ++        --left side of blade
-    "q 8 28 2 45 " ++          --right side of blade
+    "q 8 28 2 45 " ++           --right side of blade
     "l 5 0 l -1 2 l -5 0 " ++   --right side of guard
     "l 0 12 l -2 0 l 0 -12 " ++ --handle
-    "l -6 0 l 1 -2 l 7 0 " ++        --left side of guard
+    "l -6 0 l 1 -2 l 7 0 " ++   --left side of guard
     "Z"
 
 drawSword : Color -> Int -> Int -> Int -> Svg msg
 drawSword color centerx centery radius =
     drawPathD color centerx centery radius swordSize swordD
+
+wandSize : PathSize
+wandSize =
+    (13, 59)
+
+wandD : String
+wandD =
+    "M 5 59 " ++
+    "l 0 -45 l 2 0 l 0 45 " ++
+    "M 6 15 l -8 6 l 7 -8 " ++
+    "l -7 -6 l 7 4 " ++
+    "l 1 -10 l 1 10 " ++
+    "l 7 -4 l -7 6 " ++
+    "l 7 8 l -8 -6 " ++
+    "Z"
+
+drawWand : Color -> Int -> Int -> Int -> Svg msg
+drawWand color centerx centery radius =
+    drawPathD color centerx centery radius wandSize wandD
 
 pieceBody : Piece -> Color -> Int -> Int -> Int -> Svg msg
 pieceBody piece color centerx centery radius =
@@ -209,6 +228,8 @@ pieceBody piece color centerx centery radius =
             drawHand color centerx centery radius
         SwordPiece ->
             drawSword color centerx centery radius
+        WandPiece ->
+            drawWand color centerx centery radius
         _ ->
             drawCircle color centerx centery radius
 
