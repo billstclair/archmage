@@ -156,16 +156,16 @@ drawPathD color centerx centery radius pathSize pathD =
 
 cupSize : PathSize
 cupSize =
-    (50, 60)
+    (40, 60)
 
 cupD : String
 cupD =
     "M 10,60 " ++
-    "l 0 -2 l 14 0 l 0 -23 l 2 0 l 0 23 l 14 0 l 0 2 Z" ++
+    "l 0 -2 l 9 0 l 0 -23 l 2 0 l 0 23 l 9 0 l 0 2 Z" ++
     "M 0 0 " ++
-    "l 0 10 " ++
-    "A 25,25 0 1,0 50,10 " ++
-    "l 0 -10 Z"
+    "l 0 15 " ++
+    "A 20,20 0 1,0 40,15 " ++
+    "l 0 -15 Z"
 
 drawCup : Color -> Int -> Int -> Int -> Svg msg
 drawCup color centerx centery radius =
