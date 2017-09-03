@@ -70,7 +70,7 @@ drawCircle color centerx centery radius =
 
 scaleRadius : Int -> Int
 scaleRadius radius =
-    (radius * 2) // 3
+    (radius * 3) // 4
 
 drawCup : Color -> Int -> Int -> Int -> Svg msg
 drawCup color centerx centery radius =
@@ -123,11 +123,13 @@ normalizationTransform  size pathSize =
         fsx = toFloat sx
         fsy = toFloat sy
         fps = toFloat (max sx sy)
+        fsize = toFloat size
+        sc = fsize / fps
         (ox, oy) = if sx < sy then
-                       (toString((fsy - fsx) / 2.0), "0")
+                       (toString <| (fsize - (sc * fsx)) / 2.0, "0")
                    else
-                       ("0", toString((fsx - fsy) / 2.0))
-        scale = toString((toFloat size) / fps)
+                       ("0", toString <| (fsize - (sc * fsy)) / 2.0)
+        scale = toString sc
     in
         transform ("translate(" ++ ox ++ " " ++ oy ++ ") " ++
                    "scale(" ++ scale ++ ")"
@@ -137,6 +139,20 @@ drawScaledPath : Int -> PathSize -> String -> Svg msg
 drawScaledPath size pathSize theD =
     g [ normalizationTransform size pathSize ]
         [ path [ d theD ] [] ]
+
+drawPathD: Color -> Int -> Int -> Int -> PathSize -> String -> Svg msg
+drawPathD color centerx centery radius pathSize pathD =
+    let sr = scaleRadius radius
+        ox = toString (centerx - sr)
+        oy = toString (centery - sr)
+        size = 2 * sr
+        (f, o) = fillAndOpacity color
+    in
+        g [ transform <| "translate(" ++ ox ++ " " ++ oy ++ ")"
+          , fill f
+          , fillOpacity o
+          ]
+            [ drawScaledPath size pathSize pathD ]
 
 {-
 <!-- Generated with http://jxnblk.com/paths -->
@@ -162,23 +178,27 @@ handD =
     "q 2,-26 4,-2 " ++          --little
     "l 0,22 l -4,6 l -10,0 Z"
 
-drawPathD: Color -> Int -> Int -> Int -> PathSize -> String -> Svg msg
-drawPathD color centerx centery radius pathSize pathD =
-    let sr = scaleRadius radius
-        ox = toString (centerx - sr)
-        oy = toString (centery - sr)
-        size = 2 * sr
-        (f, o) = fillAndOpacity color
-    in
-        g [ transform <| "translate(" ++ ox ++ " " ++ oy ++ ")"
-          , fill f
-          , fillOpacity o
-          ]
-            [ drawScaledPath size pathSize pathD ]
-
 drawHand : Color -> Int -> Int -> Int -> Svg msg
 drawHand color centerx centery radius =
     drawPathD color centerx centery radius handSize handD
+
+swordSize : PathSize
+swordSize =
+    (13, 59)
+
+swordD : String
+swordD =
+    "M 5 45 " ++
+    "q -6 -17 2 -45 " ++        --left side of blade
+    "q 8 28 2 45 " ++          --right side of blade
+    "l 5 0 l -1 2 l -5 0 " ++   --right side of guard
+    "l 0 12 l -2 0 l 0 -12 " ++ --handle
+    "l -6 0 l 1 -2 l 7 0 " ++        --left side of guard
+    "Z"
+
+drawSword : Color -> Int -> Int -> Int -> Svg msg
+drawSword color centerx centery radius =
+    drawPathD color centerx centery radius swordSize swordD
 
 pieceBody : Piece -> Color -> Int -> Int -> Int -> Svg msg
 pieceBody piece color centerx centery radius =
@@ -187,6 +207,8 @@ pieceBody piece color centerx centery radius =
             drawCup color centerx centery radius
         HandPiece ->
             drawHand color centerx centery radius
+        SwordPiece ->
+            drawSword color centerx centery radius
         _ ->
             drawCircle color centerx centery radius
 
