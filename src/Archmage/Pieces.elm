@@ -248,6 +248,21 @@ drawMoon : Color -> Int -> Int -> Int -> Svg msg
 drawMoon color centerx centery radius =
     drawPathD color centerx centery radius moonSize moonD
 
+mageSize : PathSize
+mageSize =
+    (45, 60)
+
+mageD : String
+mageD =
+    "M 0 60 " ++
+    "l 1 -4 l 7 0 l 15 -56 l 8 2 l -4 2 " ++
+    "l 13 52 l 7 0 l -1 4 " ++
+    "Z"
+
+drawMage : Color -> Int -> Int -> Int -> Svg msg
+drawMage color centerx centery radius =
+    drawPathD color centerx centery radius mageSize mageD
+
 pieceBody : Piece -> Color -> Int -> Int -> Int -> Svg msg
 pieceBody piece color centerx centery radius =
     case piece of
@@ -263,8 +278,8 @@ pieceBody piece color centerx centery radius =
             drawTower color centerx centery radius
         MoonPiece ->
             drawMoon color centerx centery radius
-        _ ->
-            drawCircle color centerx centery radius
+        MagePiece ->
+            drawMage color centerx centery radius
 
 drawPiece : Piece -> Color -> Int -> Int -> Int -> Svg msg
 drawPiece piece color ix iy size =
