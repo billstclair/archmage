@@ -13,13 +13,14 @@ module Archmage.Pieces exposing ( drawPiece )
 
 import Archmage.Types exposing ( Piece(..), Color(..) )
 
-import Svg exposing ( Svg, line, g, path )
+import Svg exposing ( Svg, Attribute, line, g, path )
 import Svg.Attributes exposing ( x, y, width, height
                                , cx, cy, r
                                , x1, y1, x2, y2
                                , d
                                , fill, stroke, strokeWidth
                                , fillOpacity, opacity
+                               , transform
                                )
 
 import Char
@@ -67,10 +68,14 @@ drawCircle color centerx centery radius =
                    ]
             []
 
+scaleRadius : Int -> Int
+scaleRadius radius =
+    (radius * 2) // 3
+
 drawCup : Color -> Int -> Int -> Int -> Svg msg
 drawCup color centerx centery radius =
     let (f, o) = fillAndOpacity color
-        cr = (radius * 2) // 3
+        cr = scaleRadius radius
         scr = toString cr
         tlx = toString (centerx - cr)
         tly = toString (centery - cr)
@@ -109,79 +114,29 @@ drawCup color centerx centery radius =
                 []
             ]
 
-type alias IntPair =
-    (Int, Int)
-
-type alias FloatPair =
-    (Float, Float)
-
-type alias StringPair =
-    (String, String)
-
-type alias PathElement number =
-    (Char, List (number, number))
-
-type alias PathSpec number =
-    List (PathElement number)
-
-scaleInt : Float -> Float -> Int -> String
-scaleInt offset scale n =
-    toString <| scale * ((toFloat n) + offset)
-
-scaleIntPair : FloatPair -> Float -> IntPair -> StringPair
-scaleIntPair offset scale n =
-    let (ox, oy) = offset
-        (nx, ny) = n
-    in
-        (scaleInt ox scale nx, scaleInt oy scale ny)
-
-scalePathElement : FloatPair -> Float -> PathElement Int -> PathElement String
-scalePathElement offset scale element =
-    let (letter, pairs) = element
-        off = if Char.isLower letter then
-                  (0, 0)        --don't offset relative path elements
-              else
-                  offset
-    in
-        (letter, List.map (scaleIntPair off scale) pairs)
-
-scalePathSpec : FloatPair -> Float -> PathSpec Int -> PathSpec String
-scalePathSpec offset scale spec =
-    List.map (scalePathElement offset scale) spec    
-
 type alias PathSize =
     (Int, Int)
 
-normalizePathSpec : Int -> PathSize -> PathSpec Int -> PathSpec String
-normalizePathSpec size pathSize spec =
+normalizationTransform : Int -> PathSize -> Attribute msg
+normalizationTransform  size pathSize =
     let (sx, sy) = pathSize
         fsx = toFloat sx
         fsy = toFloat sy
         fps = toFloat (max sx sy)
-        offset = if sx < sy then
-                     ((fsy - fsx) / 2.0, 0.0)
-                 else
-                     (0.0, (fsx - fsy) / 2.0)
-        scale = (toFloat size) / fps
+        (ox, oy) = if sx < sy then
+                       (toString((fsy - fsx) / 2.0), "0")
+                   else
+                       ("0", toString((fsx - fsy) / 2.0))
+        scale = toString((toFloat size) / fps)
     in
-        scalePathSpec offset scale spec
+        transform ("translate(" ++ ox ++ " " ++ oy ++ ") " ++
+                   "scale(" ++ scale ++ ")"
+                  )
 
-pairToString : StringPair -> String
-pairToString pair =
-    let (px, py) = pair
-    in
-        px ++ "," ++ py
-
-pathElementToString : PathElement String -> String
-pathElementToString element =
-    let (letter, pairs) = element
-    in
-        (String.fromChar letter) ++
-            String.join " " (List.map pairToString pairs)
-
-pathSpecToString : PathSpec String -> String
-pathSpecToString spec =
-    String.join " " <| List.map pathElementToString spec
+drawScaledPath : Int -> PathSize -> String -> Svg msg
+drawScaledPath size pathSize theD =
+    g [ normalizationTransform size pathSize ]
+        [ path [ d theD ] [] ]
 
 {-
 <!-- Generated with http://jxnblk.com/paths -->
@@ -193,35 +148,45 @@ pathSpecToString spec =
   <path d='M 0,54 l 0,-20 q 5,-22 8,-2 q 3,-45 6,0 q 4,-60 8,0 l 0,-2 q 3,-46 6,2 q 2,-26 4,-2 l 0,22 l -4,6 l -10,0 Z' />
 </svg>
 -}
-handPath : PathSpec Int
-handPath =
-    [ ('M', [(0,54)])
-    , ('l', [(0,-20)])
-    , ('q', [(5,-22), (8,-2)])
-    , ('q', [(3,-45), (6,0)])
-    , ('q', [(4,-60), (8,0)])
-    , ('l', [(0,-2)])
-    , ('q', [(3,-46), (6,2)])
-    , ('q', [(2,-26), (4,-2)])
-    , ('l', [(0,22)])
-    , ('l', [(-4,6)])
-    , ('l', [(-10,0)])
-    , ('Z', [])
-    ]
-
 handSize : PathSize
 handSize =
     (32, 58)
 
-drawHand: Color -> Int -> Int -> Int -> Svg msg
+handD : String
+handD =
+    "M 5,54 l -5,-20 " ++
+    "q 5,-22 8,-2 " ++          --thumb
+    "q 3,-45 6,0 " ++           --index
+    "q 4,-60 8,0 " ++           --middle
+    "l 0,-2 q 3,-46 6,2 " ++    --ring
+    "q 2,-26 4,-2 " ++          --little
+    "l 0,22 l -4,6 l -10,0 Z"
+
+drawPathD: Color -> Int -> Int -> Int -> PathSize -> String -> Svg msg
+drawPathD color centerx centery radius pathSize pathD =
+    let sr = scaleRadius radius
+        ox = toString (centerx - sr)
+        oy = toString (centery - sr)
+        size = 2 * sr
+        (f, o) = fillAndOpacity color
+    in
+        g [ transform <| "translate(" ++ ox ++ " " ++ oy ++ ")"
+          , fill f
+          , fillOpacity o
+          ]
+            [ drawScaledPath size pathSize pathD ]
+
+drawHand : Color -> Int -> Int -> Int -> Svg msg
 drawHand color centerx centery radius =
-    drawCircle color centerx centery radius
+    drawPathD color centerx centery radius handSize handD
 
 pieceBody : Piece -> Color -> Int -> Int -> Int -> Svg msg
 pieceBody piece color centerx centery radius =
     case piece of
         CupPiece ->
             drawCup color centerx centery radius
+        HandPiece ->
+            drawHand color centerx centery radius
         _ ->
             drawCircle color centerx centery radius
 
