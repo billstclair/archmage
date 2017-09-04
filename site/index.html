@@ -6,7 +6,7 @@
   <title>Archmage</title>
   <script type="text/javascript" src="index.js"></script>
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=0, width=650">
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=0, width=710">
 </head>
 
 <body>
@@ -19,7 +19,7 @@
 <p>
 </div>
 <p style='text-align: center;'>
-  <img src='screenshot.jpg' alt='screenshot' width='650'/>
+  <img src='screenshot.jpg' alt='screenshot' width='700'/>
 </p>
 </noscript>
 
@@ -29,11 +29,11 @@
 // zoom the viewport ("user-scalable=no"), but the geniuses who make
 // Apple's Safari web browser decided to ignore that.
 // Thank you, Joseph! http://stackoverflow.com/a/38573198/1386989
-document.documentElement.addEventListener('touchstart', function (event) {
-  if (event.touches.length > 1) {
-    event.preventDefault();
-  }
-}, false);
+//document.documentElement.addEventListener('touchstart', function (event) {
+//  if (event.touches.length > 1) {
+//    event.preventDefault();
+//  }
+//}, false);
 
 Elm.Archmage.fullscreen();
 
