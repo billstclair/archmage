@@ -10,8 +10,9 @@
 ----------------------------------------------------------------------
 
 module Archmage.Types exposing ( Page(..), Msg(..), Piece(..), Board, Node
-                               , Point, RenderInfo, Mode(..)
+                               , Point, PointDict, RenderInfo, Mode(..)
                                , Color(..)
+                               , pieceList, pieceToAbbreviation, abbreviationToPiece
                                , rowLetters, zeroPoint
                                , get, set, butLast, adjoin
                                )
@@ -60,14 +61,63 @@ type Piece
   | TowerPiece
   | MoonPiece
   | MagePiece
+  | CenterHolePiece
+  | NoPiece
+
+pieceList : List Piece
+pieceList =
+    [ HandPiece, CupPiece, SwordPiece, WandPiece, TowerPiece, MoonPiece, MagePiece ]
+
+pieceToAbbreviation : Piece -> String
+pieceToAbbreviation piece =
+    case piece of
+        HandPiece ->
+            "H"
+        CupPiece ->
+            "C"
+        SwordPiece ->
+            "S"
+        WandPiece ->
+            "W"
+        TowerPiece ->
+            "T"
+        MoonPiece ->
+            "M"
+        MagePiece ->
+            "G"
+        CenterHolePiece ->
+            "L"
+        NoPiece ->
+            ""
+
+abbreviationDict : Dict String Piece
+abbreviationDict =
+    Dict.fromList [ ("H", HandPiece)
+                  , ("C", CupPiece)
+                  , ("S", SwordPiece)
+                  , ("W", WandPiece)
+                  , ("T", TowerPiece)
+                  , ("M", MoonPiece)
+                  , ("G", MagePiece)
+                  , ("L", CenterHolePiece)
+                  ]
+
+abbreviationToPiece : String -> Piece
+abbreviationToPiece abbreviation =
+    case Dict.get abbreviation abbreviationDict of
+        Nothing ->
+            NoPiece
+        Just piece ->
+            piece
 
 type alias ColoredPiece =
-  { color : Color
-  , piece : Piece
-  }
+  ( Color, Piece )
 
 type alias Board =
-    Dict String Node
+    { rows : Int
+    , cols : Int
+    , nodes: Dict String Node
+    }
 
 rowLetters : List String
 rowLetters =
@@ -93,11 +143,15 @@ type Mode
     | PlayMode
     | GameOverMode
 
+type alias PointDict =
+    Dict String Point
+
 type alias RenderInfo =
     { cellSize : Int
-    , locations : Dict String Point
-    , mode : Mode
-    , player : Int
+    , locations : PointDict
+    , setupCellSize : Int
+    , setupLineLocations : PointDict
+    , captureLineLocations : PointDict
     }
 
 type Color

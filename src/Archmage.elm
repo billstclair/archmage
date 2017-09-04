@@ -11,12 +11,10 @@
 
 module Archmage exposing (..)
 
-import Archmage.Types as Types exposing ( Piece(..), Color(..) )
+import Archmage.Types as Types exposing ( Piece(..), Color(..), Board, RenderInfo
+                                        , Msg)
 import Archmage.Pieces exposing ( drawPiece )
-import Archmage.Board exposing ( initialBoard, renderInfo, render
-                               , getNode
-                               , stringToBoard, boardToString
-                               )
+import Archmage.Board as Board
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a )
 import Html.Attributes exposing ( align, src, href, target )
@@ -24,11 +22,11 @@ import Svg exposing ( Svg, svg, g, rect )
 import Svg.Attributes exposing ( x, y, width, height, stroke, strokeWidth, fillOpacity )
 
 type alias Model =
-    {
+    { board : Board
+    , topList : Board
+    , bottomList : Board
+    , renderInfo : RenderInfo
     }
-
-type Msg =
-    None
 
 main =
     Html.program
@@ -40,12 +38,17 @@ main =
 
 init : ( Model, Cmd Msg )
 init =
-    ( {}, Cmd.none )
+    ( { board = Board.initialBoard
+      , topList = Board.whiteSetupBoard
+      , bottomList = Board.blackSetupBoard
+      , renderInfo = Board.renderInfo pieceSize
+      }
+    , Cmd.none )
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        None -> ( model, Cmd.none )
+        _ -> ( model, Cmd.none )
 
 pieceSize : Int
 pieceSize =
@@ -87,27 +90,47 @@ onePiece row col piece =
             , drawPiece piece color (ix+1) (iy+1) (pieceSize-2)
             ]
 
+drawPieceRows : Svg Msg
+drawPieceRows =
+    svg [ width <| toString (2 + (pieceCount * pieceSize))
+        , height <| toString (2 + (2 * pieceSize))
+        , stroke "black"
+        , strokeWidth "2"
+        , fillOpacity "0"
+        ]
+    <| List.append
+        (List.map2 (onePiece 0) indices pieces)
+        (List.map2 (onePiece 1) indices pieces)
+
+
 br : Html Msg
 br =
     Html.br [][]
 
 view : Model -> Html Msg
 view model =
-    div
-        [ align "center"
-          --deprecated, so sue me
-        ]
+    let renderInfo = model.renderInfo
+        cellSize = renderInfo.cellSize
+        locations = renderInfo.locations
+        setupCellSize = renderInfo.setupCellSize
+        setupLocations = renderInfo.setupLineLocations
+    in
+        div [ align "center"
+            --deprecated, so sue me
+            ]
         [ h2 [] [ text "Archmage" ]
-        , svg [ width <| toString (2 + (pieceCount * pieceSize))
-              , height <| toString (2 + (2 * pieceSize))
-              , stroke "black"
-              , strokeWidth "2"
-              , fillOpacity "0"
-              ]
-              <| List.append
-                  (List.map2 (onePiece 0) indices pieces)
-                  (List.map2 (onePiece 1) indices pieces)
-        , p []
+        , Board.render model.topList setupLocations setupCellSize
+        , br
+        , Board.render model.board locations cellSize
+        , br
+        , Board.render model.bottomList setupLocations setupCellSize
+        , footer
+        ]
+
+footer : Html Msg
+footer =
+    div []
+        [ p []
             [ a [ href "https://gibgoygames.com/"
                 , target "_blank"
                 ]

@@ -280,6 +280,19 @@ drawMage : Color -> Int -> Int -> Int -> Svg msg
 drawMage color centerx centery radius =
     drawPathD color centerx centery radius mageSize mageD
 
+drawCenterHole : Int -> Int -> Int -> Svg msg
+drawCenterHole centerx centery radius =
+    let d = toString (2 * radius)
+    in
+        Svg.rect [ x <| toString (centerx - radius)
+                 , y <| toString (centery - radius)
+                 , width d
+                 , height d
+                 , fill "black"
+                 , fillOpacity "1"
+                 ]
+            []
+
 pieceBody : Piece -> Color -> Int -> Int -> Int -> Svg msg
 pieceBody piece color centerx centery radius =
     case piece of
@@ -297,6 +310,10 @@ pieceBody piece color centerx centery radius =
             drawMoon color centerx centery radius
         MagePiece ->
             drawMage color centerx centery radius
+        CenterHolePiece ->
+            drawCenterHole centerx centery radius
+        _ ->
+            drawCircle color centerx centery radius
 
 drawPiece : Piece -> Color -> Int -> Int -> Int -> Svg msg
 drawPiece piece color ix iy size =
@@ -317,4 +334,3 @@ drawPiece piece color ix iy size =
                   []
             , pieceBody piece color centerx centery radius
             ]
-    
