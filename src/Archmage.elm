@@ -11,8 +11,11 @@
 
 module Archmage exposing (..)
 
-import Archmage.Types as Types exposing ( Piece(..), Color(..), Board, RenderInfo
-                                        , Msg)
+import Archmage.Types as Types exposing ( Piece(..), Color(..), Board, Node
+                                        , RenderInfo
+                                        , Msg(..), Mode(..), ClickKind(..)
+                                        , NodeMsg
+                                        )
 import Archmage.Pieces exposing ( drawPiece )
 import Archmage.Board as Board
 
@@ -21,11 +24,19 @@ import Html.Attributes exposing ( align, src, href, target )
 import Svg exposing ( Svg, svg, g, rect )
 import Svg.Attributes exposing ( x, y, width, height, stroke, strokeWidth, fillOpacity )
 
+type Player
+    = WhitePlayer
+    | BlackPlayer
+
 type alias Model =
-    { board : Board
+    { mode : Mode
+    , player : Player
+    , selectedNode : Maybe Node
+    , board : Board
     , topList : Board
     , bottomList : Board
     , renderInfo : RenderInfo
+    , message : Maybe String
     }
 
 main =
@@ -38,16 +49,24 @@ main =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { board = Board.initialBoard
+    ( { mode = SetupMode
+      , player = WhitePlayer
+      , selectedNode = Nothing
+      , board = Board.initialBoard
       , topList = Board.whiteSetupBoard
       , bottomList = Board.blackSetupBoard
       , renderInfo = Board.renderInfo pieceSize
+      , message = Nothing
       }
     , Cmd.none )
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        NodeClick kind board node ->
+            ( { model | message = Just <| toString node }
+            , Cmd.none
+            )
         _ -> ( model, Cmd.none )
 
 pieceSize : Int
@@ -107,6 +126,11 @@ br : Html Msg
 br =
     Html.br [][]
 
+-- TODO
+nodeMsg : Model -> NodeMsg
+nodeMsg model board node =
+    Just <| NodeClick EmptyBoardClick board node
+
 view : Model -> Html Msg
 view model =
     let renderInfo = model.renderInfo
@@ -114,16 +138,22 @@ view model =
         locations = renderInfo.locations
         setupCellSize = renderInfo.setupCellSize
         setupLocations = renderInfo.setupLineLocations
+        nm = nodeMsg model
     in
         div [ align "center"
             --deprecated, so sue me
             ]
         [ h2 [] [ text "Archmage" ]
-        , Board.render model.topList setupLocations setupCellSize
+        , Board.render model.topList setupLocations setupCellSize nm
         , br
-        , Board.render model.board locations cellSize
+        , Board.render model.board locations cellSize nm
         , br
-        , Board.render model.bottomList setupLocations setupCellSize
+        , Board.render model.bottomList setupLocations setupCellSize nm
+        , case model.message of
+              Nothing ->
+                  text ""
+              Just m ->
+                  p [] [ text m ]
         , footer
         ]
 

@@ -19,7 +19,7 @@ module Archmage.Board exposing ( initialBoard, renderInfo, render
 import Archmage.Types as Types
     exposing ( Msg(..), Board, Node
              , Point, PointDict, RenderInfo, Mode(..)
-             , Color(..), Piece(..)
+             , Color(..), Piece(..), NodeMsg
              , pieceList, pieceToAbbreviation, abbreviationToPiece
              , zeroPoint, rowLetters
              , get, set
@@ -30,7 +30,7 @@ import Archmage.Pieces exposing ( drawPiece )
 import Dict exposing ( Dict )
 import Set exposing ( Set )
 import Html exposing ( Html )
-import Svg exposing ( Svg, svg, line, g )
+import Svg exposing ( Svg, svg, line, g, rect )
 import Svg.Attributes exposing ( x, y, width, height
                                , cx, cy, r
                                , x1, y1, x2, y2
@@ -231,8 +231,8 @@ gridLines rows cols cellSize =
                        <| List.range 0 cols
             ]
 
-renderNodes : Board -> PointDict -> Int -> List (Svg Msg)
-renderNodes board locations cellSize =
+renderNodes : Board -> PointDict -> Int -> NodeMsg -> List (Svg Msg)
+renderNodes board locations cellSize nodeMsg =
     List.map (\(name, node) ->
                   case Dict.get node.name locations of
                       Nothing ->
@@ -240,16 +240,40 @@ renderNodes board locations cellSize =
                       Just {x, y} ->
                           case node.piece of
                               Nothing ->
-                                  -- Need a clickable rect
-                                  g [][]
+                                  case nodeMsg board node of
+                                      Nothing ->
+                                          g [][]
+                                      Just msg ->
+                                          clickRect x y cellSize msg
                               Just (color, piece) ->
-                                  -- Need a clickable rect
-                                  drawPiece piece color x y cellSize
+                                  let pr = drawPiece piece color x y cellSize
+                                  in
+                                      case nodeMsg board node of
+                                          Nothing ->
+                                              pr
+                                          Just msg ->
+                                              g []
+                                                  [ pr
+                                                  , clickRect x y cellSize msg
+                                                  ]
              )
              <| Dict.toList board.nodes
 
-render : Board -> PointDict -> Int -> Html Msg
-render board locations cellSize =
+clickRect : Int -> Int -> Int -> Msg -> Svg Msg
+clickRect i j cellSize msg =
+    let size = toString cellSize
+    in
+        rect [ x <| toString i
+             , y <| toString j
+             , width size
+             , height size
+             , fillOpacity "0"
+             , onClick msg
+             ]
+        []
+
+render : Board -> PointDict -> Int -> NodeMsg -> Html Msg
+render board locations cellSize nodeMsg =
     let (mx, my) = maxLocation locations
         (sx, sy) = (mx+cellSize, my+cellSize)
     in
@@ -262,6 +286,6 @@ render board locations cellSize =
             [ g [ transform "translate(1, 1)" ]
                   <| List.concat
                       [ gridLines board.rows board.cols cellSize
-                      , renderNodes board locations cellSize
+                      , renderNodes board locations cellSize nodeMsg
                       ]
             ]

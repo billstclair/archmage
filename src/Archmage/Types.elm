@@ -11,7 +11,7 @@
 
 module Archmage.Types exposing ( Page(..), Msg(..), Piece(..), Board, Node
                                , Point, PointDict, RenderInfo, Mode(..)
-                               , Color(..)
+                               , Color(..), NodeMsg, ClickKind(..)
                                , pieceList, pieceToAbbreviation, abbreviationToPiece
                                , rowLetters, zeroPoint
                                , get, set, butLast, adjoin
@@ -27,6 +27,11 @@ type Page
     | PublicPage
     | RulesPage
     | HelpPage
+
+type ClickKind
+    = EmptyBoardClick
+    | FilledBoardClick
+    | SetupBoardClick
 
 type Msg
     = SetChatInput String
@@ -45,7 +50,7 @@ type Msg
     | JoinPublicGame String
     | ResignGame
     | SetInput Int String
-    | NodeClick String
+    | NodeClick ClickKind Board Node
     | Focus Int
     | SetPage Page
     | RefreshPublicGames
@@ -129,6 +134,9 @@ type alias Node =
     , column : Int
     , piece : Maybe ColoredPiece 
     }
+
+type alias NodeMsg =
+    Board -> Node -> Maybe Msg
 
 type alias Point =
     { x : Int
