@@ -10,8 +10,10 @@
 ----------------------------------------------------------------------
 
 module Archmage.Types exposing ( Page(..), Msg(..), Piece(..), Board, Node
+                               , NodeSelection
                                , Point, PointDict, RenderInfo, Mode(..)
                                , Color(..), NodeMsg, ClickKind(..)
+                               , setBoardPiece
                                , pieceList, pieceToAbbreviation, abbreviationToPiece
                                , rowLetters, zeroPoint
                                , get, set, butLast, adjoin
@@ -118,11 +120,25 @@ abbreviationToPiece abbreviation =
 type alias ColoredPiece =
   ( Color, Piece )
 
+type alias NodeSelection =
+    ( String, Node )
+
 type alias Board =
     { rows : Int
     , cols : Int
     , nodes: Dict String Node
     }
+
+setBoardPiece : String -> Maybe ColoredPiece -> Board -> Board
+setBoardPiece name piece board =
+    case Dict.get name board.nodes of
+        Nothing ->
+            board
+        Just node ->
+            { board
+                | nodes = Dict.insert
+                          name { node | piece = piece } board.nodes
+            }
 
 rowLetters : List String
 rowLetters =
@@ -159,6 +175,7 @@ type alias RenderInfo =
     , locations : PointDict
     , setupCellSize : Int
     , setupLineLocations : PointDict
+    , captureCellSize : Int
     , captureLineLocations : PointDict
     }
 

@@ -17,7 +17,7 @@ module Archmage.Board exposing ( initialBoard, renderInfo, render
                                )
 
 import Archmage.Types as Types
-    exposing ( Msg(..), Board, Node
+    exposing ( Msg(..), Board, Node, NodeSelection
              , Point, PointDict, RenderInfo, Mode(..)
              , Color(..), Piece(..), NodeMsg
              , pieceList, pieceToAbbreviation, abbreviationToPiece
@@ -144,7 +144,8 @@ initialCaptureBoard =
         
 renderInfo : Int -> RenderInfo
 renderInfo cellSize =
-    let setupCellSize = cellSize // 2
+    let setupCellSize = (cellSize * 2) // 3
+        captureCellSize = cellSize // 2
         locations = Dict.fromList
                     <| List.map (\n -> (n.name, { x = n.column * cellSize
                                                 , y = n.row * cellSize
@@ -162,7 +163,7 @@ renderInfo cellSize =
                                      (Dict.toList whiteSetupBoard.nodes)
         captureLocations = Dict.fromList
                            <| List.map (\(name, column) ->
-                                         (name, { x = column * setupCellSize
+                                         (name, { x = column * captureCellSize
                                                 , y = 0
                                                 }
                                          )
@@ -173,6 +174,7 @@ renderInfo cellSize =
         , locations = locations            
         , setupCellSize = setupCellSize
         , setupLineLocations = setupLocations
+        , captureCellSize = captureCellSize
         , captureLineLocations = captureLocations
         }
 
@@ -231,31 +233,63 @@ gridLines rows cols cellSize =
                        <| List.range 0 cols
             ]
 
-renderNodes : Board -> PointDict -> Int -> NodeMsg -> List (Svg Msg)
-renderNodes board locations cellSize nodeMsg =
+findNodeSelection : Node -> List NodeSelection -> Maybe NodeSelection
+findNodeSelection node nodeSelections =
+    LE.find (\(_, n) -> node == n) nodeSelections
+
+addSelectionRect : Node -> Point -> Int -> List NodeSelection -> Svg Msg -> Svg Msg
+addSelectionRect node loc cellSize selections svg =
+    let sx = toString (loc.x + 3)
+        sy = toString (loc.y + 3)
+        size = toString (cellSize - 6)
+    in
+        case findNodeSelection node selections of
+            Nothing ->
+                svg
+            Just (color, _) ->
+                g []
+                    [ rect [ x sx
+                           , y sy
+                           , width size
+                           , height size
+                           , strokeWidth "4"
+                           , stroke color
+                           , fillOpacity "0"
+                           ]
+                          []
+                    , svg
+                    ]
+
+renderNode : Board -> Node -> Point -> Int -> NodeMsg -> Svg Msg
+renderNode board node {x, y} cellSize nodeMsg =
+    case node.piece of
+        Nothing ->
+            case nodeMsg board node of
+                Nothing ->
+                    g [][]
+                Just msg ->
+                    clickRect x y cellSize msg
+        Just (color, piece) ->
+            let pr = drawPiece piece color x y cellSize
+            in
+                case nodeMsg board node of
+                    Nothing ->
+                        pr
+                    Just msg ->
+                        g []
+                            [ pr
+                            , clickRect x y cellSize msg
+                            ]
+
+renderNodes : Board -> PointDict -> Int -> List NodeSelection -> NodeMsg -> List (Svg Msg)
+renderNodes board locations cellSize selections nodeMsg =
     List.map (\(name, node) ->
                   case Dict.get node.name locations of
                       Nothing ->
                           g [][]
-                      Just {x, y} ->
-                          case node.piece of
-                              Nothing ->
-                                  case nodeMsg board node of
-                                      Nothing ->
-                                          g [][]
-                                      Just msg ->
-                                          clickRect x y cellSize msg
-                              Just (color, piece) ->
-                                  let pr = drawPiece piece color x y cellSize
-                                  in
-                                      case nodeMsg board node of
-                                          Nothing ->
-                                              pr
-                                          Just msg ->
-                                              g []
-                                                  [ pr
-                                                  , clickRect x y cellSize msg
-                                                  ]
+                      Just loc ->
+                          addSelectionRect node loc cellSize selections
+                              <| renderNode board node loc cellSize nodeMsg
              )
              <| Dict.toList board.nodes
 
@@ -272,8 +306,8 @@ clickRect i j cellSize msg =
              ]
         []
 
-render : Board -> PointDict -> Int -> NodeMsg -> Html Msg
-render board locations cellSize nodeMsg =
+render : Board -> PointDict -> Int -> List NodeSelection -> NodeMsg -> Html Msg
+render board locations cellSize selections nodeMsg =
     let (mx, my) = maxLocation locations
         (sx, sy) = (mx+cellSize, my+cellSize)
     in
@@ -286,6 +320,6 @@ render board locations cellSize nodeMsg =
             [ g [ transform "translate(1, 1)" ]
                   <| List.concat
                       [ gridLines board.rows board.cols cellSize
-                      , renderNodes board locations cellSize nodeMsg
+                      , renderNodes board locations cellSize selections nodeMsg
                       ]
             ]

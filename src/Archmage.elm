@@ -12,9 +12,10 @@
 module Archmage exposing (..)
 
 import Archmage.Types as Types exposing ( Piece(..), Color(..), Board, Node
-                                        , RenderInfo
+                                        , NodeSelection, RenderInfo
                                         , Msg(..), Mode(..), ClickKind(..)
                                         , NodeMsg
+                                        , setBoardPiece
                                         )
 import Archmage.Pieces exposing ( drawPiece )
 import Archmage.Board as Board
@@ -23,6 +24,9 @@ import Html exposing ( Html, Attribute , div, h2, text, img, p, a )
 import Html.Attributes exposing ( align, src, href, target )
 import Svg exposing ( Svg, svg, g, rect )
 import Svg.Attributes exposing ( x, y, width, height, stroke, strokeWidth, fillOpacity )
+import Char
+import Dict
+import List.Extra as LE
 
 type Player
     = WhitePlayer
@@ -31,7 +35,7 @@ type Player
 type alias Model =
     { mode : Mode
     , player : Player
-    , selectedNode : Maybe Node
+    , nodeSelections : List NodeSelection
     , board : Board
     , topList : Board
     , bottomList : Board
@@ -47,27 +51,87 @@ main =
         , subscriptions = (\m -> Sub.none)
         }
 
+whitePlaceMessage = Just "White please place a piece."
+blackPlaceMessage = Just "Black please place a piece."
+
+placementSelectionColor = "black"
+
+initialPlacementSelections : Player -> Model -> List NodeSelection
+initialPlacementSelections player model =
+    let board = case player of
+                    WhitePlayer -> model.topList
+                    BlackPlayer -> model.bottomList
+        nodes = Dict.toList board.nodes
+                |> List.map Tuple.second
+                |> List.sortBy .column
+    in
+        case LE.find (\node -> node.piece /= Nothing) nodes
+        of
+            Nothing -> []
+            Just node -> [ (placementSelectionColor, node) ]
+
 init : ( Model, Cmd Msg )
 init =
-    ( { mode = SetupMode
-      , player = WhitePlayer
-      , selectedNode = Nothing
-      , board = Board.initialBoard
-      , topList = Board.whiteSetupBoard
-      , bottomList = Board.blackSetupBoard
-      , renderInfo = Board.renderInfo pieceSize
-      , message = Nothing
-      }
-    , Cmd.none )
+    let model = { mode = SetupMode
+                , player = WhitePlayer
+                , nodeSelections = []
+                , board = Board.initialBoard
+                , topList = Board.whiteSetupBoard
+                , bottomList = Board.blackSetupBoard
+                , renderInfo = Board.renderInfo pieceSize
+                , message = whitePlaceMessage
+                }
+    in
+        ( { model | nodeSelections = initialPlacementSelections model.player model }
+        , Cmd.none )
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NodeClick kind board node ->
-            ( { model | message = Just <| toString node }
-            , Cmd.none
-            )
-        _ -> ( model, Cmd.none )
+            if kind == SetupBoardClick then
+                ( { model
+                      | nodeSelections = [ (placementSelectionColor, node) ]
+                  }
+                , Cmd.none
+                )
+            else if kind == EmptyBoardClick then
+                case model.nodeSelections of
+                    [(_, sn)] ->
+                        let m = case model.player of
+                                    WhitePlayer ->
+                                        { model
+                                            | topList =
+                                                setBoardPiece
+                                                    sn.name Nothing model.topList
+                                        }
+                                    BlackPlayer ->
+                                        { model
+                                            | bottomList =
+                                                setBoardPiece
+                                                    sn.name Nothing model.bottomList
+                                        }
+                            (player, message) =
+                                 case model.player of
+                                     WhitePlayer -> (BlackPlayer, blackPlaceMessage)
+                                     BlackPlayer -> (WhitePlayer, whitePlaceMessage)
+                        in
+                           ( { m
+                                 | board = setBoardPiece node.name sn.piece m.board
+                                 , nodeSelections =
+                                     initialPlacementSelections player model
+                                 , player = player
+                                 , message = message
+                              }
+                           , Cmd.none
+                           )
+                    _ ->
+                        (model, Cmd.none)
+                            
+            else
+                (model, Cmd.none)
+        _ ->
+            ( model, Cmd.none )
 
 pieceSize : Int
 pieceSize =
@@ -126,10 +190,30 @@ br : Html Msg
 br =
     Html.br [][]
 
+nbsp : String
+nbsp =
+    String.fromChar <| Char.fromCode 160
+
 -- TODO
 nodeMsg : Model -> NodeMsg
 nodeMsg model board node =
-    Just <| NodeClick EmptyBoardClick board node
+    if model.mode == SetupMode then
+        if board == model.board then
+            if node.piece == Nothing && model.nodeSelections /= [] then
+                Just <| NodeClick EmptyBoardClick board node
+            else
+                Nothing
+        else if node.piece /= Nothing then
+            if (model.player == WhitePlayer && board == model.topList) ||
+               (model.player == BlackPlayer && board == model.bottomList)
+            then
+                Just <| NodeClick SetupBoardClick board node
+            else
+                Nothing
+        else
+            Nothing
+    else
+        Nothing
 
 view : Model -> Html Msg
 view model =
@@ -138,22 +222,25 @@ view model =
         locations = renderInfo.locations
         setupCellSize = renderInfo.setupCellSize
         setupLocations = renderInfo.setupLineLocations
+        selections = model.nodeSelections
         nm = nodeMsg model
     in
         div [ align "center"
             --deprecated, so sue me
             ]
         [ h2 [] [ text "Archmage" ]
-        , Board.render model.topList setupLocations setupCellSize nm
+        , p []
+            [ case model.message of
+                  Nothing ->
+                      text nbsp
+                  Just m ->
+                      text m
+            ]
+        , Board.render model.topList setupLocations setupCellSize selections nm
         , br
-        , Board.render model.board locations cellSize nm
+        , Board.render model.board locations cellSize selections nm
         , br
-        , Board.render model.bottomList setupLocations setupCellSize nm
-        , case model.message of
-              Nothing ->
-                  text ""
-              Just m ->
-                  p [] [ text m ]
+        , Board.render model.bottomList setupLocations setupCellSize selections nm
         , footer
         ]
 
