@@ -56,13 +56,22 @@ main =
         , subscriptions = (\m -> Sub.none)
         }
 
+placementSelectionColor = "black"
+validActorSelectionColor = "green"
+validSubjectSelectionColor = "blue"
+validTargetSelectionColor = "red"
+
 messages : List (Mode, String)
 messages =
     [ (SetupMode, "select and place a piece.")
-    , (ChooseFirstActorMode, "select a green actor.")
-    , (ChooseActorMode, "select a green actor, or click the black center square.")
-    , (ChooseSubjectMode, "select a blue subject, the actor, or the black center square.")
-    , (ChooseTargetMode, "click a red target, the subject, the actor, or the black center square.")
+    , (ChooseFirstActorMode, "select a " ++ validActorSelectionColor
+           ++ "-highighted actor.")
+    , (ChooseActorMode, "select a " ++ validActorSelectionColor
+           ++ "-highlighted actor, or click the black center square.")
+    , (ChooseSubjectMode, "select a " ++ validSubjectSelectionColor
+           ++ "-highlighted subject, the actor, or the black center square.")
+    , (ChooseTargetMode, "click a " ++ validTargetSelectionColor
+           ++ "-highlighted target, the subject, the actor, or the black center square.")
     ]
 
 setMessage : Model -> Model
@@ -77,18 +86,12 @@ setMessage model =
             in
                 { model | message = Just <| c ++ message }
 
-placementSelectionColor = "black"
-validActorSelectoinColor = "green"
-validSubjectSelectionColor = "blue"
-validTargetSelectionColor = "red"
-
 initialPlacementSelections : Player -> Model -> List NodeSelection
 initialPlacementSelections player model =
     let board = case player of
                     WhitePlayer -> model.topList
                     BlackPlayer -> model.bottomList
-        nodes = Dict.toList board.nodes
-                |> List.map Tuple.second
+        nodes = Dict.values board.nodes
                 |> List.sortBy .column
     in
         case LE.find (\node -> node.piece /= Nothing) nodes
@@ -358,11 +361,9 @@ placeAll model =
     let topList = model.topList
         bottomList = model.bottomList
         topNodes = List.sortBy .column
-                   <| List.map Tuple.second
-                   <| Dict.toList topList.nodes
+                   <| Dict.values topList.nodes
         bottomNodes = List.sortBy .column
-                      <| List.map Tuple.second
-                      <| Dict.toList bottomList.nodes
+                      <| Dict.values bottomList.nodes
         makeMsg = (\which node -> NodeClick SetupBoardClick which node)
         topMsgs = List.map (makeMsg TopList) topNodes
         bottomMsgs = List.map (makeMsg BottomList) bottomNodes

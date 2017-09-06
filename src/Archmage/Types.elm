@@ -13,6 +13,7 @@ module Archmage.Types exposing ( Page(..), Msg(..), Piece(..), Board, Node
                                , NodeSelection
                                , Point, PointDict, RenderInfo, Mode(..)
                                , Color(..), NodeMsg, ClickKind(..), WhichBoard(..)
+                               , Move, Direction(..)
                                , setBoardPiece
                                , pieceList, pieceToAbbreviation, abbreviationToPiece
                                , rowLetters, zeroPoint
@@ -75,6 +76,11 @@ type Piece
   | MagePiece
   | CenterHolePiece
   | NoPiece
+
+type Direction
+    = Push
+    | Pull
+    | PushOrPull
 
 pieceList : List Piece
 pieceList =
@@ -190,6 +196,12 @@ type alias RenderInfo =
 type Color
     = Black
     | White
+
+type alias Move =
+    { actor: Node
+    , subject: Node
+    , target: Node
+    }
 
 type alias XPlist k v =
     List (k, v)

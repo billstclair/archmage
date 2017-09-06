@@ -21,7 +21,7 @@ module Archmage.Board exposing ( initialBoard, renderInfo, render
 import Archmage.Types as Types
     exposing ( Msg(..), Board, Node, NodeSelection
              , Point, PointDict, RenderInfo, Mode(..)
-             , Color(..), Piece(..), NodeMsg
+             , Color(..), Piece(..), NodeMsg, Move, Direction(..)
              , pieceList, pieceToAbbreviation, abbreviationToPiece
              , zeroPoint, rowLetters
              , get, set
@@ -342,7 +342,7 @@ nodeNameComponents name =
 
 -- Turn a board node name into a list of horizontal neighbor names and the node
 -- that one would push to.
-horizontalNeighbors : String -> List (String, String)
+horizontalNeighbors : String -> List (List String)
 horizontalNeighbors name =
     let (row, col) = nodeNameComponents name
         scol = toString col
@@ -363,17 +363,17 @@ horizontalNeighbors name =
                               let twoAbove = Maybe.withDefault " "
                                              <| LE.getAt (idx-2) rowLetters
                               in
-                                  [ (rowAbove ++ scol, twoAbove ++ scol) ]
+                                  [[rowAbove ++ scol, twoAbove ++ scol]]
                         , if col <= 1 then
                               []
                           else
-                              [ ( row ++ (toString <| col-1)
-                                , row ++ (if col == 2 then
-                                              "0"
-                                          else
-                                              (toString <| col-2)
-                                         )
-                                )
+                              [[ row ++ (toString <| col-1)
+                               , row ++ (if col == 2 then
+                                             "0"
+                                         else
+                                             (toString <| col-2)
+                                        )
+                               ]
                               ]
                         , if rowBelow == "" then
                               []
@@ -381,17 +381,17 @@ horizontalNeighbors name =
                               let twoBelow = Maybe.withDefault " "
                                              <| LE.getAt (idx+2) rowLetters
                               in
-                                  [ ( rowBelow ++ scol, twoBelow ++ scol) ]
+                                  [[rowBelow ++ scol, twoBelow ++ scol]]
                         , if col >= 7 then
                               []
                           else
-                              [ ( row ++ (toString <| col+1)
-                                , row ++ (toString <| if col == 6 then 0 else col+2)
-                                )
+                              [[ row ++ (toString <| col+1)
+                               , row ++ (toString <| if col == 6 then 0 else col+2)
+                               ]
                               ]
                         ]
 
-diagonalNeighbors : String -> List (String, String)
+diagonalNeighbors : String -> List (List String)
 diagonalNeighbors name =
     let (row, col) = nodeNameComponents name
         scol = toString col
@@ -416,16 +416,16 @@ diagonalNeighbors name =
                                       [ if col <= 1 then
                                             []
                                         else
-                                            [ ( rowAbove ++ (toString <| col-1)
+                                            [[ rowAbove ++ (toString <| col-1)
                                               , twoAbove ++ (toString <| col-2)
-                                              )
+                                             ]
                                             ]
                                       , if col >= 7 then
                                             []
                                         else
-                                            [ ( rowAbove ++ (toString <| col+1)
+                                            [[ rowAbove ++ (toString <| col+1)
                                               , twoAbove ++ (toString <| col+2)
-                                              )
+                                             ]
                                             ]
                                       ]
                         , if rowBelow == "" then
@@ -438,16 +438,16 @@ diagonalNeighbors name =
                                       [ if col <= 1 then
                                             []
                                         else
-                                            [ ( rowBelow ++ (toString <| col-1)
-                                              , twoBelow ++ (toString <| col-2)
-                                              )
+                                            [[ rowBelow ++ (toString <| col-1)
+                                             , twoBelow ++ (toString <| col-2)
+                                             ]
                                             ]
                                       , if col >= 7 then
                                             []
                                         else
-                                            [ ( rowBelow ++ (toString <| col+1)
-                                              , twoBelow ++ (toString <| col+2)
-                                              )
+                                            [[ rowBelow ++ (toString <| col+1)
+                                             , twoBelow ++ (toString <| col+2)
+                                             ]
                                             ]
                                       ]
                         ]
@@ -575,3 +575,44 @@ allDiagonalNeighbors name =
                         , ensureCdr lb
                         , ensureCdr rb
                         ]
+
+allNeighbors : String -> List (List String)
+allNeighbors name =
+    List.concat [ horizontalNeighbors name
+                , diagonalNeighbors name
+                ]
+
+validMoves : Color -> Board -> List Move
+validMoves color board =
+    Dict.values board.nodes
+        |> List.concatMap (validMovesForNode color board)
+
+pieceMoveData : Piece -> (Direction, String -> List (List String))
+pieceMoveData piece =
+    case piece of
+        HandPiece ->
+            (Push, horizontalNeighbors)
+        CupPiece ->
+            (Pull, horizontalNeighbors)
+        SwordPiece ->
+            (Push, diagonalNeighbors)
+        WandPiece ->
+            (Pull, diagonalNeighbors)
+        TowerPiece ->
+            (PushOrPull, allHorizontalNeighbors)
+        MoonPiece ->
+            (PushOrPull, allDiagonalNeighbors)
+        MagePiece ->
+            (PushOrPull, allNeighbors)
+        _ ->
+            (PushOrPull, (\s -> []))
+
+validMovesForNode : Color -> Board -> Node -> List Move
+validMovesForNode color board node =
+    case node.piece of
+        Nothing ->
+            []
+        Just (nodeColor, piece) ->
+            case piece of
+                _ ->
+                    []
