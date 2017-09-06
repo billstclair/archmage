@@ -237,7 +237,7 @@ gridLines rows cols cellSize =
 
 findNodeSelection : Node -> List NodeSelection -> Maybe NodeSelection
 findNodeSelection node nodeSelections =
-    LE.find (\(_, n) -> node == n) nodeSelections
+    LE.find (\(_, n) -> node.name == n) nodeSelections
 
 addSelectionRect : Node -> Point -> Int -> List NodeSelection -> Svg Msg -> Svg Msg
 addSelectionRect node loc cellSize selections svg =

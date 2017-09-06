@@ -19,7 +19,7 @@ import Archmage.Types as Types
              , setBoardPiece
              )
 import Archmage.Pieces exposing ( drawPiece )
-import Archmage.Board as Board
+import Archmage.Board as Board exposing ( getNode )
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a )
 import Html.Attributes exposing ( align, src, href, target )
@@ -94,7 +94,7 @@ initialPlacementSelections player model =
         case LE.find (\node -> node.piece /= Nothing) nodes
         of
             Nothing -> []
-            Just node -> [ (placementSelectionColor, node) ]
+            Just node -> [ (placementSelectionColor, node.name) ]
 
 doPlaceAll = True
 
@@ -134,7 +134,7 @@ update msg model =
         NodeClick kind which node ->
             if kind == SetupBoardClick then
                 ( { model
-                      | nodeSelections = [ (placementSelectionColor, node) ]
+                      | nodeSelections = [ (placementSelectionColor, node.name) ]
                   }
                 , Cmd.none
                 )
@@ -147,13 +147,13 @@ update msg model =
                                           { model
                                               | topList =
                                                   setBoardPiece
-                                                      sn.name Nothing board
+                                                      sn Nothing board
                                           }
                                       BottomList ->
                                           { model
                                               | bottomList =
                                                   setBoardPiece
-                                                      sn.name Nothing board
+                                                      sn Nothing board
                                           }
                                       _ ->
                                           model
@@ -163,9 +163,15 @@ update msg model =
                                      BottomList -> WhitePlayer
                                      _ -> mod.player
                             selections = initialPlacementSelections player model
+                            list = case which of
+                                       TopList -> model.topList
+                                       _ -> model.bottomList
+                            piece = case getNode sn list of
+                                        Nothing -> Nothing
+                                        Just n -> n.piece
                             mod2 = { mod
                                        | board =
-                                           setBoardPiece node.name sn.piece mod.board
+                                           setBoardPiece node.name piece mod.board
                                        , nodeSelections = selections
                                        , player = player
                                        , mode = if selections == [] then

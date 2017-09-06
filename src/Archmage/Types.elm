@@ -126,7 +126,7 @@ type alias ColoredPiece =
   ( Color, Piece )
 
 type alias NodeSelection =
-    ( String, Node )
+    ( String, String )
 
 type alias Board =
     { rows : Int
