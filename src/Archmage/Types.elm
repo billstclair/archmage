@@ -12,7 +12,7 @@
 module Archmage.Types exposing ( Page(..), Msg(..), Piece(..), Board, Node
                                , NodeSelection
                                , Point, PointDict, RenderInfo, Mode(..)
-                               , Color(..), NodeMsg, ClickKind(..)
+                               , Color(..), NodeMsg, ClickKind(..), WhichBoard(..)
                                , setBoardPiece
                                , pieceList, pieceToAbbreviation, abbreviationToPiece
                                , rowLetters, zeroPoint
@@ -35,6 +35,11 @@ type ClickKind
     | FilledBoardClick
     | SetupBoardClick
 
+type WhichBoard
+    = TopList
+    | BottomList
+    | MainBoard
+
 type Msg
     = SetChatInput String
     | SendChat
@@ -52,7 +57,7 @@ type Msg
     | JoinPublicGame String
     | ResignGame
     | SetInput Int String
-    | NodeClick ClickKind Board Node
+    | NodeClick ClickKind WhichBoard Node
     | Focus Int
     | SetPage Page
     | RefreshPublicGames
@@ -164,6 +169,7 @@ zeroPoint =
 
 type Mode
     = SetupMode
+    | ChooseFirstActorMode
     | ChooseActorMode
     | ChooseSubjectMode
     | ChooseTargetMode

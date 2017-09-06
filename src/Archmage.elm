@@ -11,12 +11,13 @@
 
 module Archmage exposing (..)
 
-import Archmage.Types as Types exposing ( Piece(..), Color(..), Board, Node
-                                        , NodeSelection, RenderInfo
-                                        , Msg(..), Mode(..), ClickKind(..)
-                                        , NodeMsg
-                                        , setBoardPiece
-                                        )
+import Archmage.Types as Types
+    exposing ( Piece(..), Color(..), Board, Node
+             , NodeSelection, RenderInfo
+             , Msg(..), Mode(..), ClickKind(..), WhichBoard(..)
+             , NodeMsg
+             , setBoardPiece
+             )
 import Archmage.Pieces exposing ( drawPiece )
 import Archmage.Board as Board
 
@@ -27,6 +28,8 @@ import Svg.Attributes exposing ( x, y, width, height, stroke, strokeWidth, fillO
 import Char
 import Dict exposing ( Dict )
 import List.Extra as LE
+import Task
+import Debug exposing ( log )
 
 type Player
     = WhitePlayer
@@ -56,6 +59,7 @@ main =
 messages : List (Mode, String)
 messages =
     [ (SetupMode, "select and place a piece.")
+    , (ChooseFirstActorMode, "select a green actor.")
     , (ChooseActorMode, "select a green actor, or click the black center square.")
     , (ChooseSubjectMode, "select a blue subject, the actor, or the black center square.")
     , (ChooseTargetMode, "click a red target, the subject, the actor, or the black center square.")
@@ -92,6 +96,8 @@ initialPlacementSelections player model =
             Nothing -> []
             Just node -> [ (placementSelectionColor, node) ]
 
+doPlaceAll = True
+
 init : ( Model, Cmd Msg )
 init =
     let mod = { mode = SetupMode
@@ -105,15 +111,27 @@ init =
               , renderInfo = Board.renderInfo pieceSize
               , message = Nothing
               }
-        model = setMessage mod
+        model = setMessage
+                { mod
+                    | nodeSelections = initialPlacementSelections mod.player mod
+                }
     in
-        ( { model | nodeSelections = initialPlacementSelections model.player model }
-        , Cmd.none )
+        if doPlaceAll then
+            placeAll model
+        else
+            ( model, Cmd.none )
+
+whichBoard : WhichBoard -> Model -> Board
+whichBoard which model =
+    case which of
+        TopList -> model.topList
+        BottomList -> model.bottomList
+        MainBoard -> model.board
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        NodeClick kind board node ->
+    case log "" msg of
+        NodeClick kind which node ->
             if kind == SetupBoardClick then
                 ( { model
                       | nodeSelections = [ (placementSelectionColor, node) ]
@@ -123,23 +141,27 @@ update msg model =
             else if kind == EmptyBoardClick then
                 case model.nodeSelections of
                     [(_, sn)] ->
-                        let mod = case model.player of
-                                      WhitePlayer ->
+                        let board = whichBoard which model
+                            mod = case which of
+                                      TopList ->
                                           { model
                                               | topList =
                                                   setBoardPiece
-                                                      sn.name Nothing model.topList
+                                                      sn.name Nothing board
                                           }
-                                      BlackPlayer ->
+                                      BottomList ->
                                           { model
                                               | bottomList =
                                                   setBoardPiece
-                                                      sn.name Nothing model.bottomList
+                                                      sn.name Nothing board
                                           }
+                                      _ ->
+                                          model
                             player =
-                                 case model.player of
-                                     WhitePlayer -> BlackPlayer
-                                     BlackPlayer -> WhitePlayer
+                                 case which of
+                                     TopList -> BlackPlayer
+                                     BottomList -> WhitePlayer
+                                     _ -> mod.player
                             selections = initialPlacementSelections player model
                             mod2 = { mod
                                        | board =
@@ -148,7 +170,7 @@ update msg model =
                                        , player = player
                                        , mode = if selections == [] then
                                                     -- Need to compute selections
-                                                    ChooseActorMode
+                                                    ChooseFirstActorMode
                                                 else
                                                     SetupMode
                                    }
@@ -234,16 +256,20 @@ nbsp =
 nodeMsg : Model -> NodeMsg
 nodeMsg model board node =
     if model.mode == SetupMode then
-        if board == model.board then
-            if node.piece == Nothing && model.nodeSelections /= [] then
-                Just <| NodeClick EmptyBoardClick board node
-            else
-                Nothing
-        else if node.piece /= Nothing then
-            if (model.player == WhitePlayer && board == model.topList) ||
-               (model.player == BlackPlayer && board == model.bottomList)
-            then
-                Just <| NodeClick SetupBoardClick board node
+        let which = case model.player of
+                        WhitePlayer -> TopList
+                        BlackPlayer -> BottomList
+        in
+            if board == model.board then
+                if node.piece == Nothing && model.nodeSelections /= [] then
+                    Just <| NodeClick EmptyBoardClick which node
+                else
+                    Nothing
+            else if node.piece /= Nothing then
+                if (model.player == WhitePlayer && board == model.topList) ||
+                    (model.player == BlackPlayer && board == model.bottomList)
+                then
+                    Just <| NodeClick SetupBoardClick which node
             else
                 Nothing
         else
@@ -308,3 +334,50 @@ footer =
                    [ text "Elm" ]
                ]
         ]
+
+---
+--- Initial already-placed board position for debugging game play
+---
+
+placeAllPositions : List String
+placeAllPositions =
+    [ "A1", "A2", "A3", "A4"
+    , "B1", "B2", "B3", "B4"
+    , "C1", "C2", "C3", "C4"
+    , "D1", "D2"
+    ]
+
+placeAll : Model -> (Model, Cmd Msg)
+placeAll model =
+    let topList = model.topList
+        bottomList = model.bottomList
+        topNodes = List.sortBy .column
+                   <| List.map Tuple.second
+                   <| Dict.toList topList.nodes
+        bottomNodes = List.sortBy .column
+                      <| List.map Tuple.second
+                      <| Dict.toList bottomList.nodes
+        makeMsg = (\which node -> NodeClick SetupBoardClick which node)
+        topMsgs = List.map (makeMsg TopList) topNodes
+        bottomMsgs = List.map (makeMsg BottomList) bottomNodes
+        selectMsgs = LE.interweave topMsgs bottomMsgs
+        board = model.board
+        boardNodes = board.nodes
+        noNode = { name = ""
+                 , row = 0
+                 , column = 0
+                 , piece = Nothing
+                 }
+        nodes = List.map (\pos -> Maybe.withDefault noNode <| Dict.get pos boardNodes)
+                placeAllPositions
+        placeMsgs = List.map2 (\which node -> NodeClick EmptyBoardClick which node)
+                    (LE.interweave (List.repeat 7 TopList) (List.repeat 7 BottomList))
+                    nodes
+        msgs = List.reverse
+               <| LE.interweave selectMsgs placeMsgs
+        tasks = List.map Task.succeed msgs
+        cmds = List.map (Task.perform (\a -> a)) tasks
+    in
+        ( { model | player = BlackPlayer }
+        , Cmd.batch <| List.drop 0 cmds --change to 2 to not place the last piece
+        )
