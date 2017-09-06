@@ -14,6 +14,8 @@ module Archmage.Board exposing ( initialBoard, renderInfo, render
                                , initialCaptureBoard
                                , getNode
                                , stringToBoard, boardToString
+                               , horizontalNeighbors, diagonalNeighbors
+                               , allHorizontalNeighbors, allDiagonalNeighbors
                                )
 
 import Archmage.Types as Types
@@ -323,3 +325,253 @@ render board locations cellSize selections nodeMsg =
                       , renderNodes board locations cellSize selections nodeMsg
                       ]
             ]
+
+---
+--- Move support
+---
+
+nodeNameComponents : String -> (String, Int)
+nodeNameComponents name =
+    let row = String.left 1 name
+    in
+        case String.toInt <| String.dropLeft 1 name of
+            Err _ ->
+                ("", 0)
+            Ok col ->
+                (String.toUpper row, col)
+
+-- Turn a board node name into a list of horizontal neighbor names and the node
+-- that one would push to.
+horizontalNeighbors : String -> List (String, String)
+horizontalNeighbors name =
+    let (row, col) = nodeNameComponents name
+        scol = toString col
+    in
+        case LE.elemIndex row rowLetters of
+            Nothing ->
+                []
+            Just idx ->
+                let rowAbove = Maybe.withDefault ""
+                               <| LE.getAt (idx-1) rowLetters
+                    rowBelow = Maybe.withDefault ""
+                                        <| LE.getAt (idx+1) rowLetters
+                in
+                    List.concat
+                        [ if rowAbove == "" then
+                              []
+                          else
+                              let twoAbove = Maybe.withDefault " "
+                                             <| LE.getAt (idx-2) rowLetters
+                              in
+                                  [ (rowAbove ++ scol, twoAbove ++ scol) ]
+                        , if col <= 1 then
+                              []
+                          else
+                              [ ( row ++ (toString <| col-1)
+                                , row ++ (if col == 2 then
+                                              "0"
+                                          else
+                                              (toString <| col-2)
+                                         )
+                                )
+                              ]
+                        , if rowBelow == "" then
+                              []
+                          else
+                              let twoBelow = Maybe.withDefault " "
+                                             <| LE.getAt (idx+2) rowLetters
+                              in
+                                  [ ( rowBelow ++ scol, twoBelow ++ scol) ]
+                        , if col >= 7 then
+                              []
+                          else
+                              [ ( row ++ (toString <| col+1)
+                                , row ++ (toString <| if col == 6 then 0 else col+2)
+                                )
+                              ]
+                        ]
+
+diagonalNeighbors : String -> List (String, String)
+diagonalNeighbors name =
+    let (row, col) = nodeNameComponents name
+        scol = toString col
+    in
+        case LE.elemIndex row rowLetters of
+            Nothing ->
+                []
+            Just idx ->
+                let rowAbove = Maybe.withDefault ""
+                               <| LE.getAt (idx-1) rowLetters
+                    rowBelow = Maybe.withDefault ""
+                                        <| LE.getAt (idx+1) rowLetters
+                in
+                    List.concat
+                        [ if rowAbove == "" then
+                              []
+                          else
+                              let twoAbove = Maybe.withDefault " "
+                                             <| LE.getAt (idx-2) rowLetters
+                              in
+                                  List.concat
+                                      [ if col <= 1 then
+                                            []
+                                        else
+                                            [ ( rowAbove ++ (toString <| col-1)
+                                              , twoAbove ++ (toString <| col-2)
+                                              )
+                                            ]
+                                      , if col >= 7 then
+                                            []
+                                        else
+                                            [ ( rowAbove ++ (toString <| col+1)
+                                              , twoAbove ++ (toString <| col+2)
+                                              )
+                                            ]
+                                      ]
+                        , if rowBelow == "" then
+                              []
+                          else
+                              let twoBelow = Maybe.withDefault " "
+                                             <| LE.getAt (idx+2) rowLetters
+                              in
+                                  List.concat
+                                      [ if col <= 1 then
+                                            []
+                                        else
+                                            [ ( rowBelow ++ (toString <| col-1)
+                                              , twoBelow ++ (toString <| col-2)
+                                              )
+                                            ]
+                                      , if col >= 7 then
+                                            []
+                                        else
+                                            [ ( rowBelow ++ (toString <| col+1)
+                                              , twoBelow ++ (toString <| col+2)
+                                              )
+                                            ]
+                                      ]
+                        ]
+
+allHorizontalNeighbors : String -> List (List String)
+allHorizontalNeighbors name =
+    let (row, col) = nodeNameComponents name
+        scol = toString col
+        ensureCdr = (\l ->
+                         if (List.drop 1 l) == [] then
+                             []
+                         else
+                             [l]
+                    )
+        aboveLoop : Int -> String -> List String -> List String
+        aboveLoop = (\i sc res ->
+                         if i < 0 then
+                             List.reverse res
+                         else
+                             let rowAbove = Maybe.withDefault " "
+                                            <| LE.getAt (i-1) rowLetters
+                             in
+                                 aboveLoop (i-1) sc
+                                     <| (rowAbove ++ sc) :: res
+                    )
+        belowLoop : Int -> String -> List String -> List String
+        belowLoop = (\i sc res ->
+                         if i >= 7 then
+                             List.reverse res
+                         else
+                             let rowBelow = Maybe.withDefault " "
+                                            <| LE.getAt (i+1) rowLetters
+                             in
+                                 belowLoop (i+1) sc
+                                     <| (rowBelow ++ sc) :: res
+                    )
+        leftLoop  : String -> Int -> List String -> List String
+        leftLoop  = (\r c res ->
+                         if c <= 0 then
+                             List.reverse res
+                         else
+                             leftLoop r (c-1)
+                                 <| (r ++ (toString <| c-1)) :: res
+                    )
+        rightLoop : String -> Int -> List String -> List String
+        rightLoop = (\r c res ->
+                         if c >= 7 then
+                             List.reverse res
+                         else
+                             rightLoop r (c+1)
+                                 <| (r ++ (if c == 6 then "0" else (toString <| c+1)))
+                                    :: res
+                    )
+    in
+        case LE.elemIndex row rowLetters of
+            Nothing ->
+                []
+            Just idx ->
+                List.concat
+                    [ ensureCdr <| aboveLoop idx scol []
+                    , ensureCdr <| leftLoop row col []
+                    , ensureCdr <| belowLoop idx scol []
+                    , ensureCdr <| rightLoop row col []
+                    ]
+                    
+allDiagonalNeighbors : String -> List (List String)
+allDiagonalNeighbors name =
+    let (row, col) = nodeNameComponents name
+        scol = toString col
+        ensureCdr = (\l ->
+                         if (List.drop 1 l) == [] then
+                             []
+                         else
+                             [l]
+                    )
+        aboveLoop : Int -> Int -> Int -> (List String, List String) -> (List String, List String)
+        aboveLoop = (\i cl cr (left, right) ->
+                         if i < 0 then
+                             (List.reverse left, List.reverse right)
+                         else
+                             let rowAbove = Maybe.withDefault " "
+                                            <| LE.getAt (i-1) rowLetters
+                             in
+                                 aboveLoop (i-1) (cl-1) (cr+1)
+                                     ( if cl < 0 then
+                                           left
+                                       else
+                                           (rowAbove ++ (toString (cl-1))) :: left
+                                     , if cr > 7 then
+                                           right
+                                       else
+                                           (rowAbove ++ (toString (cr+1))) :: right
+                                     )
+                    )
+        belowLoop : Int -> Int -> Int -> (List String, List String) -> (List String, List String)
+        belowLoop = (\i cl cr (left, right) ->
+                         if i > 7 then
+                             (List.reverse left, List.reverse right)
+                         else
+                             let rowBelow = Maybe.withDefault " "
+                                            <| LE.getAt (i+1) rowLetters
+                             in
+                                 belowLoop (i+1) (cl-1) (cr+1)
+                                     ( if cl < 0 then
+                                           left
+                                       else
+                                           (rowBelow ++ (toString (cl-1))) :: left
+                                     , if cr > 7 then
+                                           right
+                                       else
+                                           (rowBelow ++ (toString (cr+1))) :: right
+                                     )
+                    )
+    in
+        case LE.elemIndex row rowLetters of
+            Nothing ->
+                []
+            Just idx ->
+                let (la, ra) = aboveLoop idx col col ([], [])
+                    (lb, rb) = belowLoop idx col col ([], [])
+                in
+                    List.concat
+                        [ ensureCdr la
+                        , ensureCdr ra
+                        , ensureCdr lb
+                        , ensureCdr rb
+                        ]
