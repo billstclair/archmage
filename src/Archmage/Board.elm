@@ -600,10 +600,9 @@ allNearNeighbors name =
 
 validMoves : Color -> Board -> Dict String (List Move)
 validMoves color board =
-    let moves = List.map (\node -> (node.name, validMovesForNode color board node))
-                <| Dict.values board.nodes
-    in
-        Dict.fromList moves
+    Dict.values board.nodes
+        |> List.map (\node -> (node.name, validMovesForNode color board node))
+        |> Dict.fromList
 
 pieceMoveData : Piece -> (Direction, String -> List (List String))
 pieceMoveData piece =

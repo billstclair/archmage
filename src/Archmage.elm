@@ -81,8 +81,8 @@ setMessage model =
             { model | message = Nothing }
         Just message ->
             let c = case model.player of
-                        WhitePlayer -> "White "
-                        BlackPlayer -> "Black "
+                        WhitePlayer -> "White, "
+                        BlackPlayer -> "Black, "
             in
                 { model | message = Just <| c ++ message }
 
