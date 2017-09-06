@@ -16,6 +16,7 @@ module Archmage.Board exposing ( initialBoard, renderInfo, render
                                , stringToBoard, boardToString
                                , horizontalNeighbors, diagonalNeighbors
                                , allHorizontalNeighbors, allDiagonalNeighbors
+                               , validMoves, pieceMoveData, namesToNodes
                                )
 
 import Archmage.Types as Types
@@ -424,7 +425,11 @@ diagonalNeighbors name =
                                             []
                                         else
                                             [[ rowAbove ++ (toString <| col+1)
-                                              , twoAbove ++ (toString <| col+2)
+                                              , twoAbove ++
+                                                   (if col == 6 then
+                                                        "0"
+                                                    else (toString <| col+2)
+                                                   )
                                              ]
                                             ]
                                       ]
@@ -446,7 +451,12 @@ diagonalNeighbors name =
                                             []
                                         else
                                             [[ rowBelow ++ (toString <| col+1)
-                                             , twoBelow ++ (toString <| col+2)
+                                             , twoBelow ++
+                                                 (if col == 6 then
+                                                      "0"
+                                                  else
+                                                      (toString <| col+2)
+                                                 )
                                              ]
                                             ]
                                       ]
@@ -532,7 +542,7 @@ allDiagonalNeighbors name =
                                             <| LE.getAt (i-1) rowLetters
                              in
                                  aboveLoop (i-1) (cl-1) (cr+1)
-                                     ( if cl < 0 then
+                                     ( if cl < 1 then
                                            left
                                        else
                                            (rowAbove ++ (toString (cl-1))) :: left
@@ -551,14 +561,20 @@ allDiagonalNeighbors name =
                                             <| LE.getAt (i+1) rowLetters
                              in
                                  belowLoop (i+1) (cl-1) (cr+1)
-                                     ( if cl < 0 then
+                                     ( if cl < 1 then
                                            left
                                        else
                                            (rowBelow ++ (toString (cl-1))) :: left
                                      , if cr > 7 then
                                            right
                                        else
-                                           (rowBelow ++ (toString (cr+1))) :: right
+                                           (rowBelow ++
+                                                (if cr == 7 then
+                                                     "0"
+                                                 else
+                                                     (toString (cr+1))
+                                                )
+                                           ) :: right
                                      )
                     )
     in
@@ -576,16 +592,18 @@ allDiagonalNeighbors name =
                         , ensureCdr rb
                         ]
 
-allNeighbors : String -> List (List String)
-allNeighbors name =
+allNearNeighbors : String -> List (List String)
+allNearNeighbors name =
     List.concat [ horizontalNeighbors name
                 , diagonalNeighbors name
                 ]
 
-validMoves : Color -> Board -> List Move
+validMoves : Color -> Board -> Dict String (List Move)
 validMoves color board =
-    Dict.values board.nodes
-        |> List.concatMap (validMovesForNode color board)
+    let moves = List.map (\node -> (node.name, validMovesForNode color board node))
+                <| Dict.values board.nodes
+    in
+        Dict.fromList moves
 
 pieceMoveData : Piece -> (Direction, String -> List (List String))
 pieceMoveData piece =
@@ -603,16 +621,131 @@ pieceMoveData piece =
         MoonPiece ->
             (PushOrPull, allDiagonalNeighbors)
         MagePiece ->
-            (PushOrPull, allNeighbors)
+            (PushOrPull, allNearNeighbors)
         _ ->
             (PushOrPull, (\s -> []))
 
+centerNode : Node
+centerNode =
+    { name = "D3"
+    , row = 3
+    , column = 3
+    , piece = Just (Black, CenterHolePiece)
+    }
+
+namesToNodes : Dict String Node -> List String -> List Node
+namesToNodes nodeDict names =
+    List.map (\name ->
+                  Maybe.withDefault centerNode
+                      <| Dict.get name nodeDict
+             )
+        names        
+        
 validMovesForNode : Color -> Board -> Node -> List Move
-validMovesForNode color board node =
-    case node.piece of
+validMovesForNode color board actor =
+    case actor.piece of
         Nothing ->
             []
         Just (nodeColor, piece) ->
-            case piece of
-                _ ->
-                    []
+            if nodeColor /= color then
+                []
+            else
+                let (dir, getNeighbors) = pieceMoveData piece
+                    neighbors = getNeighbors actor.name
+                    nodeDict = board.nodes
+                    neighborsNodes =
+                        List.map (namesToNodes nodeDict) neighbors
+                in
+                    case dir of
+                        Push ->
+                            validPushMoves actor neighborsNodes
+                        Pull ->
+                            validPullMoves actor neighborsNodes
+                        PushOrPull ->
+                            List.concat
+                                [ validPushMoves actor neighborsNodes
+                                , validPullMoves actor neighborsNodes
+                                ]
+                    
+movesLoop : Node -> List (List Node) -> (Node -> List Node -> Maybe Move) -> List Move
+movesLoop actor nodeLists findMove =
+    let loop = (\lists res ->
+                    case lists of
+                        [] ->
+                            List.reverse res
+                        l :: tail ->
+                            case findMove actor l of
+                                Nothing ->
+                                    loop tail res
+                                Just move ->
+                                    loop tail (move :: res)
+               )
+    in
+        loop nodeLists []
+
+validPushMoves : Node -> List (List Node) -> List Move
+validPushMoves actor nodeLists =
+    movesLoop actor nodeLists findPushMove
+
+validPullMoves : Node -> List (List Node) -> List Move
+validPullMoves actor nodeLists =
+    movesLoop actor nodeLists findPullMove
+
+findPushMove : Node -> List Node -> Maybe Move
+findPushMove actor nodes =
+    let loop = (\tail ->
+                    case tail of
+                        [] ->
+                            Nothing
+                        [_] ->
+                            Nothing
+                        a :: b :: tail ->
+                            case a.piece of
+                                Nothing ->
+                                    loop (b :: tail)
+                                Just (_, CenterHolePiece) ->
+                                    loop (b :: tail)
+                                _ ->
+                                    case b.piece of
+                                        Nothing ->
+                                           Just { actor = actor
+                                                , subject = a
+                                                , target = b
+                                                }
+                                        _ ->
+                                            Nothing
+               )
+    in
+        loop nodes
+
+findPullMove : Node -> List Node -> Maybe Move
+findPullMove actor nodes =
+    let loop = (\tail ->
+                    case tail of
+                        [] ->
+                            Nothing
+                        [_] ->
+                            Nothing
+                        a :: b :: tail ->
+                            case a.piece of
+                                Nothing ->
+                                    maybeRes b a
+                                Just (_, CenterHolePiece) ->
+                                    maybeRes b a
+                                Just _ ->
+                                    Nothing
+               )
+        maybeRes = (\subject target ->
+                        case subject.piece of
+                            Nothing ->
+                                Nothing
+                            Just (_, CenterHolePiece) ->
+                                Nothing
+                            Just _ ->
+                                Just { actor = actor
+                                     , subject = subject
+                                     , target = target
+                                     }
+                   )
+    in
+        loop nodes
