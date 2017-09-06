@@ -25,7 +25,7 @@ import Html.Attributes exposing ( align, src, href, target )
 import Svg exposing ( Svg, svg, g, rect )
 import Svg.Attributes exposing ( x, y, width, height, stroke, strokeWidth, fillOpacity )
 import Char
-import Dict
+import Dict exposing ( Dict )
 import List.Extra as LE
 
 type Player
@@ -36,6 +36,8 @@ type alias Model =
     { mode : Mode
     , player : Player
     , nodeSelections : List NodeSelection
+    , actor : Maybe Node
+    , subject : Maybe Node
     , board : Board
     , topList : Board
     , bottomList : Board
@@ -51,10 +53,30 @@ main =
         , subscriptions = (\m -> Sub.none)
         }
 
-whitePlaceMessage = Just "White please place a piece."
-blackPlaceMessage = Just "Black please place a piece."
+messages : List (Mode, String)
+messages =
+    [ (SetupMode, "select and place a piece.")
+    , (ChooseActorMode, "select a green actor, or click the black center square.")
+    , (ChooseSubjectMode, "select a blue subject, the actor, or the black center square.")
+    , (ChooseTargetMode, "click a red target, the subject, the actor, or the black center square.")
+    ]
+
+setMessage : Model -> Model
+setMessage model =
+    case Types.get model.mode messages of
+        Nothing ->
+            { model | message = Nothing }
+        Just message ->
+            let c = case model.player of
+                        WhitePlayer -> "White "
+                        BlackPlayer -> "Black "
+            in
+                { model | message = Just <| c ++ message }
 
 placementSelectionColor = "black"
+validActorSelectoinColor = "green"
+validSubjectSelectionColor = "blue"
+validTargetSelectionColor = "red"
 
 initialPlacementSelections : Player -> Model -> List NodeSelection
 initialPlacementSelections player model =
@@ -72,15 +94,18 @@ initialPlacementSelections player model =
 
 init : ( Model, Cmd Msg )
 init =
-    let model = { mode = SetupMode
-                , player = WhitePlayer
-                , nodeSelections = []
-                , board = Board.initialBoard
-                , topList = Board.whiteSetupBoard
-                , bottomList = Board.blackSetupBoard
-                , renderInfo = Board.renderInfo pieceSize
-                , message = whitePlaceMessage
-                }
+    let mod = { mode = SetupMode
+              , player = WhitePlayer
+              , nodeSelections = []
+              , actor = Nothing
+              , subject = Nothing
+              , board = Board.initialBoard
+              , topList = Board.whiteSetupBoard
+              , bottomList = Board.blackSetupBoard
+              , renderInfo = Board.renderInfo pieceSize
+              , message = Nothing
+              }
+        model = setMessage mod
     in
         ( { model | nodeSelections = initialPlacementSelections model.player model }
         , Cmd.none )
@@ -98,33 +123,44 @@ update msg model =
             else if kind == EmptyBoardClick then
                 case model.nodeSelections of
                     [(_, sn)] ->
-                        let m = case model.player of
-                                    WhitePlayer ->
-                                        { model
-                                            | topList =
-                                                setBoardPiece
-                                                    sn.name Nothing model.topList
-                                        }
-                                    BlackPlayer ->
-                                        { model
-                                            | bottomList =
-                                                setBoardPiece
-                                                    sn.name Nothing model.bottomList
-                                        }
-                            (player, message) =
+                        let mod = case model.player of
+                                      WhitePlayer ->
+                                          { model
+                                              | topList =
+                                                  setBoardPiece
+                                                      sn.name Nothing model.topList
+                                          }
+                                      BlackPlayer ->
+                                          { model
+                                              | bottomList =
+                                                  setBoardPiece
+                                                      sn.name Nothing model.bottomList
+                                          }
+                            player =
                                  case model.player of
-                                     WhitePlayer -> (BlackPlayer, blackPlaceMessage)
-                                     BlackPlayer -> (WhitePlayer, whitePlaceMessage)
+                                     WhitePlayer -> BlackPlayer
+                                     BlackPlayer -> WhitePlayer
+                            selections = initialPlacementSelections player model
+                            mod2 = { mod
+                                       | board =
+                                           setBoardPiece node.name sn.piece mod.board
+                                       , nodeSelections = selections
+                                       , player = player
+                                       , mode = if selections == [] then
+                                                    -- Need to compute selections
+                                                    ChooseActorMode
+                                                else
+                                                    SetupMode
+                                   }
+                            mod3 = if mod2.mode == SetupMode then
+                                       mod2
+                                   else
+                                       { mod2
+                                           | topList = Board.initialCaptureBoard
+                                           , bottomList = Board.initialCaptureBoard
+                                       }
                         in
-                           ( { m
-                                 | board = setBoardPiece node.name sn.piece m.board
-                                 , nodeSelections =
-                                     initialPlacementSelections player model
-                                 , player = player
-                                 , message = message
-                              }
-                           , Cmd.none
-                           )
+                           ( setMessage mod3 , Cmd.none )
                     _ ->
                         (model, Cmd.none)
                             
@@ -220,7 +256,10 @@ view model =
     let renderInfo = model.renderInfo
         cellSize = renderInfo.cellSize
         locations = renderInfo.locations
-        setupCellSize = renderInfo.setupCellSize
+        listCellSize = if model.mode == SetupMode then
+                           renderInfo.setupCellSize
+                       else
+                           renderInfo.captureCellSize
         setupLocations = renderInfo.setupLineLocations
         selections = model.nodeSelections
         nm = nodeMsg model
@@ -236,11 +275,11 @@ view model =
                   Just m ->
                       text m
             ]
-        , Board.render model.topList setupLocations setupCellSize selections nm
+        , Board.render model.topList setupLocations listCellSize selections nm
         , br
         , Board.render model.board locations cellSize selections nm
         , br
-        , Board.render model.bottomList setupLocations setupCellSize selections nm
+        , Board.render model.bottomList setupLocations listCellSize selections nm
         , footer
         ]
 

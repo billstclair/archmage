@@ -164,7 +164,9 @@ zeroPoint =
 
 type Mode
     = SetupMode
-    | PlayMode
+    | ChooseActorMode
+    | ChooseSubjectMode
+    | ChooseTargetMode
     | GameOverMode
 
 type alias PointDict =
@@ -183,10 +185,10 @@ type Color
     = Black
     | White
 
-type alias XPlist a =
-    List (String, a)
+type alias XPlist k v =
+    List (k, v)
 
-get : String -> XPlist a -> Maybe a
+get : k -> XPlist k v -> Maybe v
 get key plist =
     case plist of
         [] ->
@@ -197,7 +199,7 @@ get key plist =
             else
                 get key rest
 
-set : String -> a -> XPlist a -> XPlist a
+set : k -> v -> XPlist k v -> XPlist k v
 set key value plist =
     (key, value) :: (List.filter (\(k,_) -> k /= key) plist)
 
