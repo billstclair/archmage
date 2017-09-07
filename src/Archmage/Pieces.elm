@@ -320,19 +320,19 @@ pieceTitle : Piece -> String
 pieceTitle piece =
     case piece of
         CupPiece ->
-            "Cup: Pull horizontally nearby"
+            "Cup: Pull horizontally or vertically nearby"
         HandPiece ->
-            "Hand: Push horizontally nearby"
+            "Hand: Push horizontally or vertically nearby"
         SwordPiece ->
             "Sword: Push diagonally nearby"
         WandPiece ->
             "Wand: Pull diagonally nearby"
         TowerPiece ->
-            "Tower: Push or pull horizontally any distance"
+            "Tower: Push or pull horizontally or vertically any distance"
         MoonPiece ->
             "Moon: Push or pull diagonally any distance"
         MagePiece ->
-            "Mage: Push or pull horizontally or diagonally nearby"
+            "Mage: Push or pull horizontally, vertically, or diagonally nearby"
         CenterHolePiece ->
             "Center Hole: Push or pull here to capture"
         _ ->
