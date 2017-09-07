@@ -121,7 +121,7 @@ initialPlacementSelections player model =
 -- Set true to place all the pieces at startup.
 -- Used to speed debugging of the move code.
 doPlaceAll : Bool
-doPlaceAll = True
+doPlaceAll = False
 
 init : ( Model, Cmd Msg )
 init =

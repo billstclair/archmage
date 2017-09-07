@@ -33,12 +33,12 @@ import Archmage.Types as Types
              , get, set
              )
 
-import Archmage.Pieces exposing ( drawPiece )
+import Archmage.Pieces exposing ( drawPiece, pieceTitle )
 
 import Dict exposing ( Dict )
 import Set exposing ( Set )
 import Html exposing ( Html )
-import Svg exposing ( Svg, svg, line, g, rect )
+import Svg exposing ( Svg, svg, line, g, rect, title, text )
 import Svg.Attributes exposing ( x, y, width, height
                                , cx, cy, r
                                , x1, y1, x2, y2
@@ -245,6 +245,14 @@ findNodeSelection : Node -> List NodeSelection -> Maybe NodeSelection
 findNodeSelection node nodeSelections =
     LE.find (\(_, n) -> node.name == n) nodeSelections
 
+nodeTitle : Node -> String
+nodeTitle node =
+    case node.piece of
+        Nothing ->
+            ""
+        Just (_, piece) ->
+            pieceTitle piece
+
 addSelectionRect : Node -> Point -> Int -> List NodeSelection -> Svg Msg -> Svg Msg
 addSelectionRect node loc cellSize selections svg =
     let sx = toString (loc.x + 3)
@@ -255,18 +263,21 @@ addSelectionRect node loc cellSize selections svg =
             Nothing ->
                 svg
             Just (color, _) ->
-                g []
-                    [ rect [ x sx
-                           , y sy
-                           , width size
-                           , height size
-                           , strokeWidth "4"
-                           , stroke color
-                           , fillOpacity "0"
-                           ]
-                          []
-                    , svg
-                    ]
+                let titleString = nodeTitle node
+                in
+                    g []
+                        [ title [] [ text titleString ]
+                        , rect [ x sx
+                               , y sy
+                               , width size
+                               , height size
+                               , strokeWidth "4"
+                               , stroke color
+                               , fillOpacity "0"
+                               ]
+                              []
+                        , svg
+                        ]
 
 renderNode : Board -> Node -> Point -> Int -> NodeMsg -> Svg Msg
 renderNode board node {x, y} cellSize nodeMsg =
@@ -284,10 +295,13 @@ renderNode board node {x, y} cellSize nodeMsg =
                     Nothing ->
                         pr
                     Just msg ->
-                        g []
-                            [ pr
-                            , clickRect x y cellSize msg
-                            ]
+                        let titleString = nodeTitle node
+                        in
+                            g []
+                                [ title [] [ text titleString ]
+                                , pr
+                                , clickRect x y cellSize msg
+                                ]
 
 renderNodes : Board -> PointDict -> Int -> List NodeSelection -> NodeMsg -> List (Svg Msg)
 renderNodes board locations cellSize selections nodeMsg =

@@ -9,7 +9,7 @@
 --
 ----------------------------------------------------------------------
 
-module Archmage.Pieces exposing ( drawPiece )
+module Archmage.Pieces exposing ( drawPiece, pieceTitle )
 
 import Archmage.Types exposing ( Piece(..), Color(..) )
 
