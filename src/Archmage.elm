@@ -15,7 +15,7 @@ import Archmage.Types as Types
     exposing ( Piece(..), Color(..), Board, Node
              , NodeSelection, RenderInfo
              , Msg(..), Mode(..), ClickKind(..), WhichBoard(..)
-             , NodeMsg
+             , NodeMsg, MovesDict
              , setBoardPiece
              )
 import Archmage.Pieces exposing ( drawPiece )
@@ -35,9 +35,22 @@ type Player
     = WhitePlayer
     | BlackPlayer
 
+playerColor : Player -> Color
+playerColor player =
+    case player of
+        WhitePlayer -> White
+        BlackPlayer -> Black
+
+otherPlayer : Player -> Player
+otherPlayer player =
+    case player of
+        WhitePlayer -> BlackPlayer
+        BlackPlayer -> WhitePlayer
+
 type alias Model =
     { mode : Mode
     , player : Player
+    , moves : Maybe MovesDict
     , nodeSelections : List NodeSelection
     , actor : Maybe Node
     , subject : Maybe Node
@@ -72,6 +85,7 @@ messages =
            ++ "-highlighted subject, the actor, or the black center square.")
     , (ChooseTargetMode, "click a " ++ validTargetSelectionColor
            ++ "-highlighted target, the subject, the actor, or the black center square.")
+    , (GameOverMode, "Game Over")
     ]
 
 setMessage : Model -> Model
@@ -83,8 +97,13 @@ setMessage model =
             let c = case model.player of
                         WhitePlayer -> "White, "
                         BlackPlayer -> "Black, "
+                msg = case model.mode of
+                          GameOverMode ->
+                              message
+                          _ ->
+                              c ++ message
             in
-                { model | message = Just <| c ++ message }
+                { model | message = Just <| msg }
 
 initialPlacementSelections : Player -> Model -> List NodeSelection
 initialPlacementSelections player model =
@@ -108,6 +127,7 @@ init : ( Model, Cmd Msg )
 init =
     let mod = { mode = SetupMode
               , player = WhitePlayer
+              , moves = Nothing
               , nodeSelections = []
               , actor = Nothing
               , subject = Nothing
@@ -118,18 +138,18 @@ init =
               , message = Nothing
               }
         mod2 = if not doPlaceAll then
-                   mod
+                   { mod
+                       | nodeSelections = initialPlacementSelections mod.player mod
+                   }
                else
+                   findValidMoves
                    { mod
                        | board = Board.dummyBoard
                        , topList = Board.initialCaptureBoard
                        , bottomList = Board.initialCaptureBoard
                        , mode = ChooseFirstActorMode
                    }
-        model = setMessage
-                { mod2
-                    | nodeSelections = initialPlacementSelections mod.player mod
-                }
+        model = setMessage mod2
     in
         ( model, Cmd.none )
 
@@ -195,6 +215,7 @@ update msg model =
                             mod3 = if mod2.mode == SetupMode then
                                        mod2
                                    else
+                                       findValidMoves
                                        { mod2
                                            | topList = Board.initialCaptureBoard
                                            , bottomList = Board.initialCaptureBoard
@@ -208,6 +229,39 @@ update msg model =
                 (model, Cmd.none)
         _ ->
             ( model, Cmd.none )
+
+findValidMoves : Model -> Model
+findValidMoves model =
+    let moves = Board.validMoves (playerColor model.player) model.board
+        printedMoves = log "moves" <| Board.printMoves moves
+    in
+        case highlightActors moves model of
+            Just m ->
+                { m | moves = Just moves }
+            Nothing ->
+                let player = otherPlayer model.player
+                    otherMoves = Board.validMoves (playerColor player) model.board
+                    m = { model
+                            | player = player
+                            , moves = Just moves
+                        }
+                in
+                    case highlightActors otherMoves m of
+                        Nothing ->
+                            setMessage { m | mode = GameOverMode }
+                        Just m2 ->
+                            m2
+
+highlightActors : MovesDict -> Model -> Maybe Model
+highlightActors moves model =
+    case Dict.keys moves of
+        [] ->
+            Nothing
+        keys ->
+            Just { model
+                     | nodeSelections =
+                         List.map (\key -> (validActorSelectionColor, key)) keys
+                 }
 
 pieceSize : Int
 pieceSize =
@@ -227,40 +281,6 @@ pieces =
     , MoonPiece
     , MagePiece
     ]
-
-indices : List Int
-indices =
-    List.range 0 (pieceCount - 1)
-
-onePiece : Int -> Int -> Piece -> Svg Msg
-onePiece row col piece =
-    let ix = 1 + (col * pieceSize)
-        iy = 1 + (row * pieceSize)
-        size = toString(pieceSize)
-        color = if row == 0 then White else Black
-    in
-        g []
-            [ rect [ x <| toString ix
-                   , y <| toString iy
-                   , width size
-                   , height size
-                   ]
-                  []
-            , drawPiece piece color (ix+1) (iy+1) (pieceSize-2)
-            ]
-
-drawPieceRows : Svg Msg
-drawPieceRows =
-    svg [ width <| toString (2 + (pieceCount * pieceSize))
-        , height <| toString (2 + (2 * pieceSize))
-        , stroke "black"
-        , strokeWidth "2"
-        , fillOpacity "0"
-        ]
-    <| List.append
-        (List.map2 (onePiece 0) indices pieces)
-        (List.map2 (onePiece 1) indices pieces)
-
 
 br : Html Msg
 br =
@@ -305,7 +325,17 @@ view model =
                        else
                            renderInfo.captureCellSize
         setupLocations = renderInfo.setupLineLocations
-        selections = model.nodeSelections
+        sels = model.nodeSelections
+        (topsel, boardsel, botsel) =
+            case model.mode of
+                SetupMode ->
+                    case model.player of
+                        WhitePlayer ->
+                            (sels, [], [])
+                        BlackPlayer ->
+                            ([], [], sels)
+                _ ->
+                    ([], sels, [])
         nm = nodeMsg model
     in
         div [ align "center"
@@ -319,11 +349,11 @@ view model =
                   Just m ->
                       text m
             ]
-        , Board.render model.topList setupLocations listCellSize selections nm
+        , Board.render model.topList setupLocations listCellSize topsel nm
         , br
-        , Board.render model.board locations cellSize selections nm
+        , Board.render model.board locations cellSize boardsel nm
         , br
-        , Board.render model.bottomList setupLocations listCellSize selections nm
+        , Board.render model.bottomList setupLocations listCellSize botsel nm
         , footer
         ]
 

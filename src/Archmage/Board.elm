@@ -25,7 +25,8 @@ module Archmage.Board exposing ( initialBoard, renderInfo, render
 import Archmage.Types as Types
     exposing ( Msg(..), Board, Node, NodeSelection
              , Point, PointDict, RenderInfo, Mode(..)
-             , Color(..), Piece(..), ColoredPiece, NodeMsg, Move, Direction(..)
+             , Color(..), Piece(..), ColoredPiece, NodeMsg, Move, MovesDict
+             , Direction(..)
              , setBoardPiece
              , pieceList, pieceToAbbreviation, abbreviationToPiece
              , zeroPoint, rowLetters
@@ -602,7 +603,7 @@ allNearNeighbors name =
                 , diagonalNeighbors name
                 ]
 
-validMoves : Color -> Board -> Dict String (List Move)
+validMoves : Color -> Board -> MovesDict
 validMoves color board =
     Dict.values board.nodes
         |> List.concatMap (\node ->
@@ -635,7 +636,7 @@ printMove move =
     in
         (sn, color, piece, tn)
 
-printMoves : Dict String (List Move) -> List (String, Color, Piece, List PrintedMove)
+printMoves : MovesDict -> List (String, Color, Piece, List PrintedMove)
 printMoves moves =
     Dict.values moves
         |> List.concatMap

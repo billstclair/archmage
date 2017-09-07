@@ -13,7 +13,7 @@ module Archmage.Types exposing ( Page(..), Msg(..), Piece(..), Board, Node
                                , NodeSelection, ColoredPiece
                                , Point, PointDict, RenderInfo, Mode(..)
                                , Color(..), NodeMsg, ClickKind(..), WhichBoard(..)
-                               , Move, Direction(..)
+                               , Move, MovesDict, Direction(..)
                                , setBoardPiece
                                , pieceList, pieceToAbbreviation, abbreviationToPiece
                                , rowLetters, zeroPoint
@@ -204,6 +204,9 @@ type alias Move =
     , subject: Node
     , target: Node
     }
+
+type alias MovesDict =
+    Dict String (List Move)
 
 type alias XPlist k v =
     List (k, v)

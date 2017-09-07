@@ -13,18 +13,19 @@ module Archmage.Pieces exposing ( drawPiece )
 
 import Archmage.Types exposing ( Piece(..), Color(..) )
 
-import Svg exposing ( Svg, Attribute, line, g, path )
-import Svg.Attributes exposing ( x, y, width, height
-                               , cx, cy, r
-                               , x1, y1, x2, y2
-                               , d
-                               , fill, stroke, strokeWidth
-                               , fillOpacity, opacity
-                               , transform
-                               )
-
+import Svg exposing ( Svg, Attribute, line, g, path, title, text )
+import Svg.Attributes as Attributes
+    exposing ( x, y, width, height
+             , cx, cy, r
+             , x1, y1, x2, y2
+             , d
+             , fill, stroke, strokeWidth
+             , fillOpacity, opacity
+             , transform
+             )
+        
 import Char
-
+        
 colorString : Color -> String
 colorString color =
     case color of
@@ -315,16 +316,41 @@ pieceBody piece color centerx centery radius =
         _ ->
             drawCircle color centerx centery radius
 
+pieceTitle : Piece -> String
+pieceTitle piece =
+    case piece of
+        CupPiece ->
+            "Cup: Pull horizontally nearby"
+        HandPiece ->
+            "Hand: Push horizontally nearby"
+        SwordPiece ->
+            "Sword: Push diagonally nearby"
+        WandPiece ->
+            "Wand: Pull diagonally nearby"
+        TowerPiece ->
+            "Tower: Push or pull horizontally any distance"
+        MoonPiece ->
+            "Moon: Push or pull diagonally any distance"
+        MagePiece ->
+            "Mage: Push or pull horizontally or diagonally nearby"
+        CenterHolePiece ->
+            "Center Hole: Push or pull here to capture"
+        _ ->
+            ""
+
 drawPiece : Piece -> Color -> Int -> Int -> Int -> Svg msg
 drawPiece piece color ix iy size =
     let radius = size // 2
-        centerx = ix + radius
-        centery = iy + radius
+        six = toString ix
+        siy = toString iy
         ssize = toString size
+        titleString = pieceTitle piece
     in
-        g []
-            [ Svg.rect [ x <| toString ix
-                       , y <| toString iy
+        g [ transform <| "translate("++six++" "++siy++")"
+          ]
+            [ title [] [ text titleString ]
+            , Svg.rect [ x "0"
+                       , y "0"
                        , width ssize
                        , height ssize
                        , fill <| colorString color
@@ -332,5 +358,5 @@ drawPiece piece color ix iy size =
                        , strokeWidth "0"
                        ]
                   []
-            , pieceBody piece color centerx centery radius
+            , pieceBody piece color radius radius radius
             ]
