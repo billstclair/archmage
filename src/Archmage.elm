@@ -99,6 +99,9 @@ initialPlacementSelections player model =
             Nothing -> []
             Just node -> [ (placementSelectionColor, node.name) ]
 
+-- Set true to place all the pieces at startup.
+-- Used to speed debugging of the move code.
+doPlaceAll : Bool
 doPlaceAll = True
 
 init : ( Model, Cmd Msg )
@@ -114,15 +117,21 @@ init =
               , renderInfo = Board.renderInfo pieceSize
               , message = Nothing
               }
+        mod2 = if not doPlaceAll then
+                   mod
+               else
+                   { mod
+                       | board = Board.dummyBoard
+                       , topList = Board.initialCaptureBoard
+                       , bottomList = Board.initialCaptureBoard
+                       , mode = ChooseFirstActorMode
+                   }
         model = setMessage
-                { mod
+                { mod2
                     | nodeSelections = initialPlacementSelections mod.player mod
                 }
     in
-        if doPlaceAll then
-            placeAll model
-        else
-            ( model, Cmd.none )
+        ( model, Cmd.none )
 
 whichBoard : WhichBoard -> Model -> Board
 whichBoard which model =
@@ -343,48 +352,3 @@ footer =
                    [ text "Elm" ]
                ]
         ]
-
----
---- Initial already-placed board position for debugging game play
----
-
-placeAllPositions : List String
-placeAllPositions =
-    [ "A1", "A2", "A3", "A4"
-    , "B1", "B2", "B3", "B4"
-    , "C1", "C2", "C3", "C4"
-    , "D1", "D2"
-    ]
-
-placeAll : Model -> (Model, Cmd Msg)
-placeAll model =
-    let topList = model.topList
-        bottomList = model.bottomList
-        topNodes = List.sortBy .column
-                   <| Dict.values topList.nodes
-        bottomNodes = List.sortBy .column
-                      <| Dict.values bottomList.nodes
-        makeMsg = (\which node -> NodeClick SetupBoardClick which node)
-        topMsgs = List.map (makeMsg TopList) topNodes
-        bottomMsgs = List.map (makeMsg BottomList) bottomNodes
-        selectMsgs = LE.interweave topMsgs bottomMsgs
-        board = model.board
-        boardNodes = board.nodes
-        noNode = { name = ""
-                 , row = 0
-                 , column = 0
-                 , piece = Nothing
-                 }
-        nodes = List.map (\pos -> Maybe.withDefault noNode <| Dict.get pos boardNodes)
-                placeAllPositions
-        placeMsgs = List.map2 (\which node -> NodeClick EmptyBoardClick which node)
-                    (LE.interweave (List.repeat 7 TopList) (List.repeat 7 BottomList))
-                    nodes
-        msgs = List.reverse
-               <| LE.interweave selectMsgs placeMsgs
-        tasks = List.map Task.succeed msgs
-        cmds = List.map (Task.perform (\a -> a)) tasks
-    in
-        ( { model | player = BlackPlayer }
-        , Cmd.batch <| List.drop 0 cmds --change to 2 to not place the last piece
-        )

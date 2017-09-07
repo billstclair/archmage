@@ -10,7 +10,7 @@
 ----------------------------------------------------------------------
 
 module Archmage.Types exposing ( Page(..), Msg(..), Piece(..), Board, Node
-                               , NodeSelection
+                               , NodeSelection, ColoredPiece
                                , Point, PointDict, RenderInfo, Mode(..)
                                , Color(..), NodeMsg, ClickKind(..), WhichBoard(..)
                                , Move, Direction(..)
@@ -142,14 +142,16 @@ type alias Board =
 
 setBoardPiece : String -> Maybe ColoredPiece -> Board -> Board
 setBoardPiece name piece board =
-    case Dict.get name board.nodes of
-        Nothing ->
-            board
-        Just node ->
-            { board
-                | nodes = Dict.insert
-                          name { node | piece = piece } board.nodes
-            }
+    let uname = String.toUpper name
+    in
+        case Dict.get uname board.nodes of
+            Nothing ->
+                board
+            Just node ->
+                { board
+                    | nodes = Dict.insert
+                              uname { node | piece = piece } board.nodes
+                }
 
 rowLetters : List String
 rowLetters =

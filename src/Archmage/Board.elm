@@ -16,13 +16,17 @@ module Archmage.Board exposing ( initialBoard, renderInfo, render
                                , stringToBoard, boardToString
                                , horizontalNeighbors, diagonalNeighbors
                                , allHorizontalNeighbors, allDiagonalNeighbors
-                               , validMoves, pieceMoveData, namesToNodes
+                               , validMoves, validMovesForNode
+                               , pieceMoveData, namesToNodes
+                               , printNode, printMove, printMoves
+                               , dummyBoard
                                )
 
 import Archmage.Types as Types
     exposing ( Msg(..), Board, Node, NodeSelection
              , Point, PointDict, RenderInfo, Mode(..)
-             , Color(..), Piece(..), NodeMsg, Move, Direction(..)
+             , Color(..), Piece(..), ColoredPiece, NodeMsg, Move, Direction(..)
+             , setBoardPiece
              , pieceList, pieceToAbbreviation, abbreviationToPiece
              , zeroPoint, rowLetters
              , get, set
@@ -183,7 +187,7 @@ renderInfo cellSize =
 
 getNode : String -> Board -> Maybe Node
 getNode name board =
-    Dict.get name board.nodes
+    Dict.get (String.toUpper name) board.nodes
 
 setNode : String -> Node -> Board -> Board
 setNode name node board =
@@ -601,8 +605,61 @@ allNearNeighbors name =
 validMoves : Color -> Board -> Dict String (List Move)
 validMoves color board =
     Dict.values board.nodes
-        |> List.map (\node -> (node.name, validMovesForNode color board node))
+        |> List.concatMap (\node ->
+                               let moves = validMovesForNode color board node
+                               in
+                                   if moves == [] then
+                                       []
+                                   else
+                                       [(node.name, moves)]
+                          )
         |> Dict.fromList
+
+type alias PrintedNode =
+    (String, Maybe ColoredPiece)
+
+printNode : Node -> PrintedNode
+printNode node =
+    (node.name, node.piece)
+
+type alias PrintedMove =
+    (String, Color, Piece, String)
+
+printMove : Move -> PrintedMove
+printMove move =
+    let (sn, sp) = printNode move.subject
+        (tn, tp) = printNode move.target
+        (color, piece) = case sp of
+                             Nothing -> (Black, CenterHolePiece)
+                             Just p -> p
+    in
+        (sn, color, piece, tn)
+
+printMoves : Dict String (List Move) -> List (String, Color, Piece, List PrintedMove)
+printMoves moves =
+    Dict.values moves
+        |> List.concatMap
+           (\moves ->
+                case moves of
+                    [] ->       --can't happen
+                        []
+                    {actor} :: _ ->
+                        [(printNode actor, (List.map printMove moves))]
+           )
+        |> List.map (\((name, piece), moves) ->
+                       case piece of
+                           Nothing ->
+                               Nothing
+                           Just (c, p) ->
+                               Just (name, c, p, moves)
+                    )
+        |> LE.remove Nothing
+        |> List.map (\x -> case x of
+                               Nothing ->
+                                 ("", Black, CenterHolePiece, [])
+                               Just m ->
+                                   m
+                    )
 
 pieceMoveData : Piece -> (Direction, String -> List (List String))
 pieceMoveData piece =
@@ -748,3 +805,33 @@ findPullMove actor nodes =
                    )
     in
         loop nodes
+
+---
+--- An initial board position for play in elm repl
+---
+
+dummyPlacements : List (String, ColoredPiece)
+dummyPlacements =
+    [ ("a1", (White, HandPiece))
+    , ("a2", (Black, HandPiece))
+    , ("a4", (White, CupPiece))
+    , ("a6", (Black, CupPiece))
+    , ("c1", (White, SwordPiece))
+    , ("c2", (Black, SwordPiece))
+    , ("b4", (White, WandPiece))
+    , ("b6", (Black, WandPiece))
+    , ("d1", (White, TowerPiece))
+    , ("d2", (Black, TowerPiece))
+    , ("d6", (White, MoonPiece))
+    , ("d5", (Black, MoonPiece))
+    , ("f1", (White, MagePiece))
+    , ("f2", (Black, MagePiece))
+    ]
+
+dummyBoard : Board
+dummyBoard =
+    List.foldl (\(pos, piece) board ->
+                  setBoardPiece pos (Just piece) board
+               )
+               initialBoard
+               dummyPlacements
