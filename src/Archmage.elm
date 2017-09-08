@@ -49,8 +49,9 @@ otherPlayer player =
 
 type alias Model =
     { mode : Mode
+    , isFirstMove : Bool
     , player : Player
-    , moves : Maybe MovesDict
+    , moves : MovesDict
     , nodeSelections : List NodeSelection
     , actor : Maybe Node
     , subject : Maybe Node
@@ -70,22 +71,20 @@ main =
         }
 
 placementSelectionColor = "black"
-validActorSelectionColor = "green"
-validSubjectSelectionColor = "blue"
-validTargetSelectionColor = "red"
+actorSelectionColor = "green"
+subjectSelectionColor = "blue"
+targetSelectionColor = "red"
 
 messages : List (Mode, String)
 messages =
-    [ (SetupMode, "select and place a piece.")
-    , (ChooseFirstActorMode, "select a " ++ validActorSelectionColor
-           ++ "-highighted actor.")
-    , (ChooseActorMode, "select a " ++ validActorSelectionColor
-           ++ "-highlighted actor, or click the black center square.")
-    , (ChooseSubjectMode, "select a " ++ validSubjectSelectionColor
-           ++ "-highlighted subject, the actor, or the black center square.")
-    , (ChooseTargetMode, "click a " ++ validTargetSelectionColor
-           ++ "-highlighted target, the subject, the actor, or the black center square.")
-    , (GameOverMode, "Game Over")
+    [ (SetupMode, "select and place a piece")
+    , (ChooseActorMode, "click a " ++ actorSelectionColor
+           ++ "-highighted actor")
+    , (ChooseSubjectMode, "click a " ++ subjectSelectionColor
+           ++ "-highlighted subject")
+    , (ChooseTargetMode, "click a " ++ targetSelectionColor
+           ++ "-highlighted target, the subject")
+    , (GameOverMode, "Game Over!")
     ]
 
 setMessage : Model -> Model
@@ -101,7 +100,28 @@ setMessage model =
                           GameOverMode ->
                               message
                           _ ->
-                              c ++ message
+                              let suffix = if model.isFirstMove then
+                                               case model.mode of
+                                                   ChooseSubjectMode ->
+                                                       " or the actor."
+                                                   ChooseTargetMode ->
+                                                       ", or the actor."
+                                                   _ ->
+                                                       "."
+                                           else
+                                               case model.mode of
+                                                   SetupMode ->
+                                                       "."
+                                                   ChooseActorMode ->
+                                                       " or the black center square."
+                                                   ChooseSubjectMode ->
+                                                       ", the actor, or the black center square."
+                                                   ChooseTargetMode ->
+                                                       ", the actor, or the black center square."
+                                                   _ ->
+                                                       "."
+                              in
+                                  c ++ message ++ suffix
             in
                 { model | message = Just <| msg }
 
@@ -121,13 +141,14 @@ initialPlacementSelections player model =
 -- Set true to place all the pieces at startup.
 -- Used to speed debugging of the move code.
 doPlaceAll : Bool
-doPlaceAll = False
+doPlaceAll = True
 
 init : ( Model, Cmd Msg )
 init =
     let mod = { mode = SetupMode
+              , isFirstMove = True
               , player = WhitePlayer
-              , moves = Nothing
+              , moves = Dict.empty
               , nodeSelections = []
               , actor = Nothing
               , subject = Nothing
@@ -137,19 +158,18 @@ init =
               , renderInfo = Board.renderInfo pieceSize
               , message = Nothing
               }
-        mod2 = if not doPlaceAll then
-                   { mod
-                       | nodeSelections = initialPlacementSelections mod.player mod
-                   }
-               else
-                   findValidMoves
-                   { mod
-                       | board = Board.dummyBoard
-                       , topList = Board.initialCaptureBoard
-                       , bottomList = Board.initialCaptureBoard
-                       , mode = ChooseFirstActorMode
-                   }
-        model = setMessage mod2
+        model = if not doPlaceAll then
+                    { mod
+                        | nodeSelections = initialPlacementSelections mod.player mod
+                    }
+                else
+                    findValidMoves
+                    { mod
+                        | board = Board.dummyBoard
+                        , topList = Board.initialCaptureBoard
+                        , bottomList = Board.initialCaptureBoard
+                        , mode = ChooseActorMode
+                    }
     in
         ( model, Cmd.none )
 
@@ -164,91 +184,119 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case log "" msg of
         NodeClick kind which node ->
-            if kind == SetupBoardClick then
-                ( { model
-                      | nodeSelections = [ (placementSelectionColor, node.name) ]
-                  }
-                , Cmd.none
-                )
-            else if kind == EmptyBoardClick then
-                case model.nodeSelections of
-                    [(_, sn)] ->
-                        let board = whichBoard which model
-                            mod = case which of
-                                      TopList ->
-                                          { model
-                                              | topList =
-                                                  setBoardPiece
-                                                      sn Nothing board
-                                          }
-                                      BottomList ->
-                                          { model
-                                              | bottomList =
-                                                  setBoardPiece
-                                                      sn Nothing board
-                                          }
-                                      _ ->
-                                          model
-                            player =
-                                 case which of
-                                     TopList -> BlackPlayer
-                                     BottomList -> WhitePlayer
-                                     _ -> mod.player
-                            selections = initialPlacementSelections player model
-                            list = case which of
-                                       TopList -> model.topList
-                                       _ -> model.bottomList
-                            piece = case getNode sn list of
-                                        Nothing -> Nothing
-                                        Just n -> n.piece
-                            mod2 = { mod
-                                       | board =
-                                           setBoardPiece node.name piece mod.board
-                                       , nodeSelections = selections
-                                       , player = player
-                                       , mode = if selections == [] then
-                                                    -- Need to compute selections
-                                                    ChooseFirstActorMode
-                                                else
-                                                    SetupMode
-                                   }
-                            mod3 = if mod2.mode == SetupMode then
-                                       mod2
-                                   else
-                                       findValidMoves
-                                       { mod2
-                                           | topList = Board.initialCaptureBoard
-                                           , bottomList = Board.initialCaptureBoard
-                                       }
-                        in
-                           ( setMessage mod3 , Cmd.none )
-                    _ ->
-                        (model, Cmd.none)
-                            
-            else
-                (model, Cmd.none)
+            case kind of
+                SetupBoardClick ->
+                    ( { model
+                          | nodeSelections = [ (placementSelectionColor, node.name) ]
+                      }
+                    , Cmd.none
+                    )
+                EmptyBoardClick ->
+                    case model.mode of
+                        SetupMode ->
+                            setupEmptyBoardClick which node model
+                        _ ->
+                            (model, Cmd.none)
+                ChooseActorClick ->
+                    let subjectSelections =
+                            case Dict.get node.name model.moves of
+                                Nothing ->
+                                    []
+                                Just moves ->
+                                    List.map (\move ->
+                                                  ( subjectSelectionColor
+                                                  , move.subject.name
+                                                  )
+                                             )
+                                        moves
+                    in
+                        ( { model
+                              | mode = ChooseSubjectMode
+                              , actor = Just node
+                              , nodeSelections =
+                                (actorSelectionColor, node.name) :: subjectSelections
+                          }
+                        , Cmd.none
+                        )
+                _ ->
+                    (model, Cmd.none)
         _ ->
             ( model, Cmd.none )
+
+setupEmptyBoardClick : WhichBoard -> Node -> Model -> (Model, Cmd Msg)
+setupEmptyBoardClick which node model =
+    case model.nodeSelections of
+        [] ->
+            (model, Cmd.none)
+        (_, sn) :: _ ->
+            let board = whichBoard which model
+                mod = case which of
+                          TopList ->
+                              { model
+                                  | topList =
+                                    setBoardPiece
+                                    sn Nothing board
+                              }
+                          BottomList ->
+                              { model
+                                  | bottomList =
+                                    setBoardPiece
+                                    sn Nothing board
+                              }
+                          _ ->
+                              model
+                player = case which of
+                             TopList -> BlackPlayer
+                             BottomList -> WhitePlayer
+                             _ -> mod.player
+                selections = initialPlacementSelections player model
+                list = case which of
+                           TopList -> model.topList
+                           _ -> model.bottomList
+                piece = case getNode sn list of
+                            Nothing -> Nothing
+                            Just n -> n.piece
+                mod2 = { mod
+                           | board =
+                               setBoardPiece node.name piece mod.board
+                           , nodeSelections = selections
+                           , player = player
+                           , mode = if selections == [] then
+                                        -- Need to compute selections
+                                        ChooseActorMode
+                                    else
+                                        SetupMode
+                       }
+                mod3 = if mod2.mode == SetupMode then
+                           mod2
+                       else
+                           findValidMoves
+                           { mod2
+                               | topList = Board.initialCaptureBoard
+                               , bottomList = Board.initialCaptureBoard
+                           }
+            in
+                ( mod3 , Cmd.none )
+
 
 findValidMoves : Model -> Model
 findValidMoves model =
     let moves = Board.validMoves (playerColor model.player) model.board
-        printedMoves = log "moves" <| Board.printMoves moves
     in
         case highlightActors moves model of
             Just m ->
-                { m | moves = Just moves }
+                { m | moves = moves }
             Nothing ->
                 let player = otherPlayer model.player
                     otherMoves = Board.validMoves (playerColor player) model.board
                     m = { model
                             | player = player
-                            , moves = Just moves
+                            , moves = moves
                         }
                 in
                     case highlightActors otherMoves m of
                         Nothing ->
-                            setMessage { m | mode = GameOverMode }
+                            { m | mode = GameOverMode }
                         Just m2 ->
                             m2
 
@@ -260,7 +308,7 @@ highlightActors moves model =
         keys ->
             Just { model
                      | nodeSelections =
-                         List.map (\key -> (validActorSelectionColor, key)) keys
+                         List.map (\key -> (actorSelectionColor, key)) keys
                  }
 
 pieceSize : Int
@@ -293,67 +341,89 @@ nbsp =
 -- TODO
 nodeMsg : Model -> NodeMsg
 nodeMsg model board node =
-    if model.mode == SetupMode then
-        let which = case model.player of
-                        WhitePlayer -> TopList
-                        BlackPlayer -> BottomList
-        in
-            if board == model.board then
-                if node.piece == Nothing && model.nodeSelections /= [] then
-                    Just <| NodeClick EmptyBoardClick which node
-                else
-                    Nothing
-            else if node.piece /= Nothing then
-                if (model.player == WhitePlayer && board == model.topList) ||
-                    (model.player == BlackPlayer && board == model.bottomList)
-                then
-                    Just <| NodeClick SetupBoardClick which node
-            else
+    let piece = node.piece
+        name = node.name
+    in
+        case model.mode of
+            GameOverMode ->
                 Nothing
-        else
-            Nothing
-    else
-        Nothing
+            SetupMode ->
+                let which = case model.player of
+                                WhitePlayer -> TopList
+                                BlackPlayer -> BottomList
+                in
+                    if board == model.board then
+                        if node.piece == Nothing && model.nodeSelections /= [] then
+                            Just <| NodeClick EmptyBoardClick which node
+                        else
+                            Nothing
+                    else if piece /= Nothing then
+                        if (model.player == WhitePlayer && board == model.topList) ||
+                            (model.player == BlackPlayer && board == model.bottomList)
+                        then
+                            Just <| NodeClick SetupBoardClick which node
+                        else
+                            Nothing
+                    else
+                        Nothing
+            ChooseActorMode ->
+                case piece of
+                    Nothing ->
+                        Nothing
+                    Just _ ->
+                        case LE.find (\(_, nn) -> name == nn) model.nodeSelections of
+                            Nothing ->
+                                Nothing
+                            _ ->
+                                Just <| NodeClick ChooseActorClick MainBoard node
+            ChooseSubjectMode ->
+                Nothing
+            ChooseTargetMode ->
+                Nothing
 
 view : Model -> Html Msg
 view model =
-    let renderInfo = model.renderInfo
+    let mod = setMessage model
+        renderInfo = mod.renderInfo
         cellSize = renderInfo.cellSize
         locations = renderInfo.locations
-        listCellSize = if model.mode == SetupMode then
+        listCellSize = if mod.mode == SetupMode then
                            renderInfo.setupCellSize
                        else
                            renderInfo.captureCellSize
         setupLocations = renderInfo.setupLineLocations
-        sels = model.nodeSelections
+        sels = mod.nodeSelections
         (topsel, boardsel, botsel) =
-            case model.mode of
+            case mod.mode of
                 SetupMode ->
-                    case model.player of
+                    case mod.player of
                         WhitePlayer ->
                             (sels, [], [])
                         BlackPlayer ->
                             ([], [], sels)
                 _ ->
                     ([], sels, [])
-        nm = nodeMsg model
+        modNodeMsg = nodeMsg mod
     in
         div [ align "center"
             --deprecated, so sue me
             ]
         [ h2 [] [ text "Archmage" ]
         , p []
-            [ case model.message of
+            [ case mod.message of
                   Nothing ->
                       text nbsp
                   Just m ->
                       text m
             ]
-        , Board.render model.topList setupLocations listCellSize topsel nm
+        , Board.render
+            mod.topList setupLocations listCellSize topsel modNodeMsg
         , br
-        , Board.render model.board locations cellSize boardsel nm
+        , Board.render
+            mod.board locations cellSize boardsel modNodeMsg
         , br
-        , Board.render model.bottomList setupLocations listCellSize botsel nm
+        , Board.render
+            mod.bottomList setupLocations listCellSize botsel modNodeMsg
         , footer
         ]
 

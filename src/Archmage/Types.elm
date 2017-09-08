@@ -33,7 +33,9 @@ type Page
 
 type ClickKind
     = EmptyBoardClick
-    | FilledBoardClick
+    | ChooseActorClick
+    | ChooseSubjectClick
+    | ChooseTargetClick
     | SetupBoardClick
 
 type WhichBoard
@@ -177,7 +179,6 @@ zeroPoint =
 
 type Mode
     = SetupMode
-    | ChooseFirstActorMode
     | ChooseActorMode
     | ChooseSubjectMode
     | ChooseTargetMode

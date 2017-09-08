@@ -338,19 +338,20 @@ pieceTitle piece =
         _ ->
             ""
 
-drawPiece : Piece -> Color -> Int -> Int -> Int -> Svg msg
-drawPiece piece color ix iy size =
+drawPiece : Piece -> Color -> Int -> Int -> Int -> Int -> Svg msg
+drawPiece piece color ix iy size colorInset =
     let radius = size // 2
         six = toString ix
         siy = toString iy
-        ssize = toString size
+        si = toString colorInset
+        ssize = toString (size - (2 * colorInset))
         titleString = pieceTitle piece
     in
         g [ transform <| "translate("++six++" "++siy++")"
           ]
             [ title [] [ text titleString ]
-            , Svg.rect [ x "0"
-                       , y "0"
+            , Svg.rect [ x si
+                       , y si
                        , width ssize
                        , height ssize
                        , fill <| colorString color

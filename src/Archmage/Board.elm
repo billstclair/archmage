@@ -253,13 +253,17 @@ nodeTitle node =
         Just (_, piece) ->
             pieceTitle piece
 
-addSelectionRect : Node -> Point -> Int -> List NodeSelection -> Svg Msg -> Svg Msg
-addSelectionRect node loc cellSize selections svg =
-    let sx = toString (loc.x + 3)
-        sy = toString (loc.y + 3)
-        size = toString (cellSize - 6)
+selectionWidth : Int
+selectionWidth =
+    4
+
+addSelectionRect : Node -> Point -> Int -> Maybe NodeSelection -> Svg Msg -> Svg Msg
+addSelectionRect node loc cellSize selection svg =
+    let sx = toString (loc.x + selectionWidth - 1)
+        sy = toString (loc.y + selectionWidth - 1)
+        size = toString (cellSize - (2 * (selectionWidth - 1)))
     in
-        case findNodeSelection node selections of
+        case selection of
             Nothing ->
                 svg
             Just (color, _) ->
@@ -271,7 +275,7 @@ addSelectionRect node loc cellSize selections svg =
                                , y sy
                                , width size
                                , height size
-                               , strokeWidth "4"
+                               , strokeWidth <| toString selectionWidth
                                , stroke color
                                , fillOpacity "0"
                                ]
@@ -279,8 +283,8 @@ addSelectionRect node loc cellSize selections svg =
                         , svg
                         ]
 
-renderNode : Board -> Node -> Point -> Int -> NodeMsg -> Svg Msg
-renderNode board node {x, y} cellSize nodeMsg =
+renderNode : Board -> Node -> Point -> Int -> Maybe NodeSelection -> NodeMsg -> Svg Msg
+renderNode board node {x, y} cellSize selection nodeMsg =
     case node.piece of
         Nothing ->
             case nodeMsg board node of
@@ -289,7 +293,12 @@ renderNode board node {x, y} cellSize nodeMsg =
                 Just msg ->
                     clickRect x y cellSize msg
         Just (color, piece) ->
-            let pr = drawPiece piece color x y cellSize
+            let inset = case selection of
+                            Nothing ->
+                                0
+                            _ ->
+                                selectionWidth
+                pr = drawPiece piece color x y cellSize inset
             in
                 case nodeMsg board node of
                     Nothing ->
@@ -310,8 +319,10 @@ renderNodes board locations cellSize selections nodeMsg =
                       Nothing ->
                           g [][]
                       Just loc ->
-                          addSelectionRect node loc cellSize selections
-                              <| renderNode board node loc cellSize nodeMsg
+                          let selection = findNodeSelection node selections
+                          in
+                              addSelectionRect node loc cellSize selection
+                                  <| renderNode board node loc cellSize selection nodeMsg
              )
              <| Dict.toList board.nodes
 
