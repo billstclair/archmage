@@ -522,7 +522,7 @@ allHorizontalNeighbors name =
                     )
         leftLoop  : String -> Int -> List String -> List String
         leftLoop  = (\r c res ->
-                         if c <= 0 then
+                         if c < 0 then
                              List.reverse res
                          else
                              leftLoop r (c-1)
@@ -803,20 +803,28 @@ findPushMove actor nodes =
 
 findPullMove : Node -> List Node -> Maybe Move
 findPullMove actor nodes =
-    let loop = (\tail ->
+    let loop = (\tail maybeTarget ->
                     case tail of
                         [] ->
                             Nothing
-                        [_] ->
-                            Nothing
-                        a :: b :: tail ->
-                            case a.piece of
+                        [subject] ->
+                            case maybeTarget of
                                 Nothing ->
-                                    maybeRes b a
-                                Just (_, CenterHolePiece) ->
-                                    maybeRes b a
-                                Just _ ->
                                     Nothing
+                                Just target ->
+                                    maybeRes subject target
+                        subject :: tail ->
+                            case subject.piece of
+                                Nothing ->
+                                    loop tail (Just subject)
+                                Just (_, CenterHolePiece) ->
+                                    loop tail (Just subject)
+                                Just _ ->
+                                    case maybeTarget of
+                                        Nothing ->
+                                            Nothing
+                                        Just target ->
+                                            maybeRes subject target
                )
         maybeRes = (\subject target ->
                         case subject.piece of
@@ -825,13 +833,14 @@ findPullMove actor nodes =
                             Just (_, CenterHolePiece) ->
                                 Nothing
                             Just _ ->
+                                log "  move"
                                 Just { actor = actor
                                      , subject = subject
                                      , target = target
                                      }
                    )
     in
-        loop nodes
+        loop (log "findPullMove" nodes) Nothing
 
 ---
 --- An initial board position for play in elm repl
