@@ -34,6 +34,7 @@ type Page
 type ClickKind
     = EmptyBoardClick
     | ChooseActorClick
+    | OtherPlayerClick
     | UnchooseActorClick
     | ChooseSubjectClick
     | UnchooseSubjectClick

@@ -79,6 +79,7 @@ main =
         }
 
 placementSelectionColor = "black"
+otherPlayerSelectionColor = "orange"
 actorSelectionColor = "green"
 subjectSelectionColor = "blue"
 targetSelectionColor = "red"
@@ -89,9 +90,9 @@ messages =
     , (ChooseActorMode, "click a " ++ actorSelectionColor
            ++ "-highighted actor")
     , (ChooseSubjectMode, "click a " ++ subjectSelectionColor
-           ++ "-highlighted subject")
+           ++ "-highlighted subject or the actor")
     , (ChooseTargetMode, "click a " ++ targetSelectionColor
-           ++ "-highlighted target, the subject")
+           ++ "-highlighted target, the subject, or the actor")
     , (GameOverMode, "Game Over!")
     ]
 
@@ -109,23 +110,11 @@ setMessage model =
                               message
                           _ ->
                               let suffix = if model.isFirstMove then
-                                               case model.mode of
-                                                   ChooseSubjectMode ->
-                                                       " or the actor."
-                                                   ChooseTargetMode ->
-                                                       ", or the actor."
-                                                   _ ->
-                                                       "."
+                                               "."
                                            else
                                                case model.mode of
-                                                   SetupMode ->
-                                                       "."
                                                    ChooseActorMode ->
                                                        " or the black center square."
-                                                   ChooseSubjectMode ->
-                                                       ", the actor, or the black center square."
-                                                   ChooseTargetMode ->
-                                                       ", the actor, or the black center square."
                                                    _ ->
                                                        "."
                               in
@@ -149,7 +138,7 @@ initialPlacementSelections player model =
 -- Set true to place all the pieces at startup.
 -- Used to speed debugging of the move code.
 doPlaceAll : Bool
-doPlaceAll = True
+doPlaceAll = False --True
 
 init : ( Model, Cmd Msg )
 init =
@@ -210,6 +199,14 @@ update msg model =
                             setupEmptyBoardClick which node model
                         _ ->
                             (model, Cmd.none)
+                OtherPlayerClick ->
+                    ( findValidMoves
+                          { model
+                              | player = otherPlayer model.player
+                              , isFirstMove = True
+                          }
+                    , Cmd.none
+                    )
                 ChooseActorClick ->
                     let subjectSelections =
                             case Dict.get node.name model.moves of
@@ -444,7 +441,13 @@ highlightActors moves model =
         keys ->
             Just { model
                      | nodeSelections =
-                         List.map (\key -> (actorSelectionColor, key)) keys
+                         List.concat
+                             [ List.map (\key -> (actorSelectionColor, key)) keys
+                             , if model.isFirstMove then
+                                   []
+                               else
+                                   [(otherPlayerSelectionColor, "D3")]
+                             ]
                  }
 
 pieceSize : Int
@@ -510,12 +513,21 @@ nodeMsg model board node =
                 case piece of
                     Nothing ->
                         Nothing
-                    Just _ ->
-                        case findSelection name model of
-                            Nothing ->
-                                Nothing
+                    Just (_, piece) ->
+                        case piece of
+                            CenterHolePiece ->
+                                if model.isFirstMove then
+                                    Nothing
+                                else
+                                    Just
+                                    <| NodeClick OtherPlayerClick MainBoard node
                             _ ->
-                                Just <| NodeClick ChooseActorClick MainBoard node
+                                case findSelection name model of
+                                    Nothing ->
+                                        Nothing
+                                    _ ->
+                                        Just
+                                        <| NodeClick ChooseActorClick MainBoard node
             ChooseSubjectMode ->
                 case piece of
                     Nothing ->
