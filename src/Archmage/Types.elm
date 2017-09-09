@@ -111,7 +111,7 @@ pieceToAbbreviation piece =
         MagePiece ->
             "G"
         CenterHolePiece ->
-            "L"
+            "O"
         NoPiece ->
             ""
 
@@ -124,12 +124,12 @@ abbreviationDict =
                   , ("T", TowerPiece)
                   , ("M", MoonPiece)
                   , ("G", MagePiece)
-                  , ("L", CenterHolePiece)
+                  , ("O", CenterHolePiece)
                   ]
 
 abbreviationToPiece : String -> Piece
 abbreviationToPiece abbreviation =
-    case Dict.get abbreviation abbreviationDict of
+    case Dict.get (String.toUpper abbreviation) abbreviationDict of
         Nothing ->
             NoPiece
         Just piece ->

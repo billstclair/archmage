@@ -37,7 +37,7 @@ import Archmage.Types as Types
 import Archmage.Pieces exposing ( drawPiece, pieceTitle )
 
 import Dict exposing ( Dict )
-import Set exposing ( Set )
+import Char
 import Html exposing ( Html )
 import Svg exposing ( Svg, svg, line, g, rect, title, text )
 import Svg.Attributes exposing ( x, y, width, height
@@ -219,13 +219,131 @@ setNode name node board =
         | nodes = Dict.insert name node board.nodes
     }
 
+firstChar : String -> Char
+firstChar string =
+    String.toList string
+        |> List.head
+        |> Maybe.withDefault ' '
+
+pieceToChar : Maybe ColoredPiece -> Char
+pieceToChar piece =
+    case piece of
+        Nothing ->
+            '-'
+        Just (color, piece) ->
+            let letter = firstChar <| pieceToAbbreviation piece
+            in
+                case color of
+                    White ->
+                        Char.toLower letter
+                    Black ->
+                        Char.toUpper letter
+
+charToPiece : Char -> Maybe ColoredPiece
+charToPiece char =
+    let str = String.fromChar char
+    in
+        if str == "-" then
+            Nothing
+        else
+            let piece = abbreviationToPiece str
+                color = if str == String.toUpper str then
+                            Black
+                        else
+                            White
+            in
+                Just (color, piece)
+
+nodeLessp : Node -> Node -> Order
+nodeLessp n1 n2 =
+    if n1.row < n2.row then
+        LT
+    else if n1.row > n2.row then
+        GT
+    else if n1.column < n2.column then
+        LT
+    else if n2.column < n1.column then
+        GT
+    else
+        EQ
+
 boardToString : Board -> String
 boardToString board =
-    ""
+    Dict.toList board.nodes
+        |> List.map Tuple.second
+        |> List.sortWith nodeLessp
+        |> List.map (pieceToChar << .piece)
+        |> String.fromList
+
+setupRowColToNodeName : Int -> Int -> String
+setupRowColToNodeName row col =
+    case LE.find (\(j, _, _) -> j == col) setupList of
+        Nothing ->
+            " "                 --can't happen
+        Just (_, res, _) ->
+            res
+
+captureRowColToNodeName : Int -> Int -> String
+captureRowColToNodeName row col =
+    case LE.find (\(_, j) -> j == col) captureList of
+        Nothing ->
+            " "                 --can't happen
+        Just (res, _) ->
+            res
+
+mainBoardRowColToNodeName : Int -> Int -> String
+mainBoardRowColToNodeName row col =
+    let rowName = case LE.getAt row rowLetters of
+                      Nothing ->
+                          toString row --can't happen
+                      Just name ->
+                          name
+    in
+        rowName ++ (toString col)        
 
 stringToBoard : String -> Board
 stringToBoard string =
-    initialBoard
+    let len = String.length string
+        rows = if len <= 14 then
+                   1
+               else
+                   7
+        cols = if len == 14 then
+                     14
+                 else
+                     7
+        rowColToName = if len == 7 then
+                           setupRowColToNodeName
+                       else if len == 14 then
+                           captureRowColToNodeName
+                       else
+                           mainBoardRowColToNodeName
+        loop : List Char -> Int -> Int -> List (String, Node) -> Board
+        loop = (\chars row col res ->
+                    case chars of
+                        [] ->
+                            { rows = rows
+                            , cols = cols
+                            , nodes = Dict.fromList res
+                            }
+                        char :: tail ->
+                            let name = rowColToName row col
+                                piece = charToPiece char
+                                (r, c) = if col+1 >= cols then
+                                             (row+1, 0)
+                                         else
+                                             (row, col+1)
+                            in
+                                loop tail r c
+                                    <| (name, { name = name
+                                              , row = row
+                                              , column = col
+                                              , piece = piece
+                                              }
+                                       ) :: res
+               )
+    in
+        loop (String.toList string) 0 0 []                            
 
 maxLocation : PointDict -> (Int, Int)
 maxLocation locations =

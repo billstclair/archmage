@@ -21,7 +21,9 @@ import Archmage.Types as Types
              , setBoardPiece, pieceToAbbreviation
              )
 import Archmage.Pieces exposing ( drawPiece )
-import Archmage.Board as Board exposing ( initialGameState, getNode, printMove )
+import Archmage.Board as Board exposing ( initialGameState, getNode, printMove
+                                        , boardToString, stringToBoard
+                                        )
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span )
 import Html.Attributes exposing ( align, src, href, target, style )
@@ -673,16 +675,19 @@ renderGamePage model =
                 _ ->
                     ([], sels, [])
         modNodeMsg = nodeMsg model
+        tl = gs.topList
+        b = gs.board
+        bl = gs.bottomList
     in
         div []
             [ Board.render
-                  gs.topList setupLocations listCellSize topsel modNodeMsg
+                tl setupLocations listCellSize topsel modNodeMsg
             , br
             , Board.render
-                gs.board locations cellSize boardsel modNodeMsg
+                b locations cellSize boardsel modNodeMsg
             , br
             , Board.render
-                gs.bottomList setupLocations listCellSize botsel modNodeMsg
+                bl setupLocations listCellSize botsel modNodeMsg
             , newGameButton
             ]
 
