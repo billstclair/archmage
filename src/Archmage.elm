@@ -14,15 +14,16 @@ module Archmage exposing (..)
 import Archmage.Types as Types
     exposing ( Piece(..), Color(..), Board, Node
              , NodeSelection, RenderInfo
-             , Msg(..), Mode(..), ClickKind(..), WhichBoard(..)
+             , Page(..), Msg(..), Mode(..), ClickKind(..), WhichBoard(..)
              , NodeMsg, MovesDict
              , setBoardPiece
              )
 import Archmage.Pieces exposing ( drawPiece )
 import Archmage.Board as Board exposing ( getNode )
 
-import Html exposing ( Html, Attribute , div, h2, text, img, p, a )
-import Html.Attributes exposing ( align, src, href, target )
+import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span )
+import Html.Attributes exposing ( align, src, href, target, style )
+import Html.Events exposing ( onClick )
 import Svg exposing ( Svg, svg, g, rect )
 import Svg.Attributes exposing ( x, y, width, height, stroke, strokeWidth, fillOpacity )
 import Char
@@ -48,7 +49,8 @@ otherPlayer player =
         BlackPlayer -> WhitePlayer
 
 type alias Model =
-    { mode : Mode
+    { page : Page
+    , mode : Mode
     , isFirstMove : Bool
     , player : Player
     , moves : MovesDict
@@ -145,7 +147,8 @@ doPlaceAll = True
 
 init : ( Model, Cmd Msg )
 init =
-    let mod = { mode = SetupMode
+    let mod = { page = GamePage
+              , mode = SetupMode
               , isFirstMove = True
               , player = WhitePlayer
               , moves = Dict.empty
@@ -183,6 +186,10 @@ whichBoard which model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case log "" msg of
+        SetPage page ->
+            ( { model | page = page }
+            , Cmd.none
+            )
         NodeClick kind which node ->
             case kind of
                 SetupBoardClick ->
@@ -224,7 +231,8 @@ update msg model =
                               | mode = ChooseActorMode
                               , subject = Nothing
                           }
-                    , Cmd.none)
+                    , Cmd.none
+                    )
                 ChooseSubjectClick ->
                     let actorName = case model.actor of
                                         Just actor ->
@@ -439,34 +447,72 @@ nodeMsg model board node =
             ChooseTargetMode ->
                 Nothing
 
+playButton : Html Msg
+playButton =
+    p []
+        [ button [ onClick <| SetPage GamePage
+                 , style [("font-size", "150%")]
+                 ]
+              [ text "Play" ]
+        ]
+
+iframe : String -> Html Msg
+iframe url =
+    Html.iframe [ style [ ("width", "40em")
+                        , ("height", "40em")
+                        ]
+                , src url
+                ]
+        []
+
+renderIframePage : Model -> String -> Html Msg
+renderIframePage model url =
+    div []
+        [ playButton
+        , iframe url
+        , playButton
+        ]
+
+renderRulesPage : Model -> Html Msg
+renderRulesPage model =
+    renderIframePage model "docs/rules.html"
+
+renderHelpPage : Model -> Html Msg
+renderHelpPage model =
+    renderIframePage model "docs/help.html"
+
+pages : List (Page, String)
+pages =
+    [ ( HelpPage, "Help" )
+    --, ( PublicPage, "Public")
+    , ( RulesPage, "Rules" )
+    ]
+
+pageLink : Page -> (Page, String) -> Html Msg
+pageLink currentPage (page, label) =
+    span []
+        [ text " "
+        , if currentPage == page then
+              span [ style [("font-weight", "bold")] ] [ text label ]
+          else
+              a [ href "#", onClick <| SetPage page ]
+                  [ text label ]
+        ]
+
+pageLinks : Page -> Html Msg
+pageLinks currentPage =
+    span []
+        <| List.map (pageLink currentPage) pages
+
 view : Model -> Html Msg
 view model =
     let mod = setMessage model
-        renderInfo = mod.renderInfo
-        cellSize = renderInfo.cellSize
-        locations = renderInfo.locations
-        listCellSize = if mod.mode == SetupMode then
-                           renderInfo.setupCellSize
-                       else
-                           renderInfo.captureCellSize
-        setupLocations = renderInfo.setupLineLocations
-        sels = mod.nodeSelections
-        (topsel, boardsel, botsel) =
-            case mod.mode of
-                SetupMode ->
-                    case mod.player of
-                        WhitePlayer ->
-                            (sels, [], [])
-                        BlackPlayer ->
-                            ([], [], sels)
-                _ ->
-                    ([], sels, [])
-        modNodeMsg = nodeMsg mod
     in
         div [ align "center"
             --deprecated, so sue me
             ]
         [ h2 [] [ text "Archmage" ]
+        , p [] [ pageLinks model.page ]
         , p []
             [ case mod.message of
                   Nothing ->
@@ -474,16 +520,52 @@ view model =
                   Just m ->
                       text m
             ]
-        , Board.render
-            mod.topList setupLocations listCellSize topsel modNodeMsg
-        , br
-        , Board.render
-            mod.board locations cellSize boardsel modNodeMsg
-        , br
-        , Board.render
-            mod.bottomList setupLocations listCellSize botsel modNodeMsg
+        , case model.page of
+              GamePage ->
+                  renderGamePage mod
+              PublicPage ->
+                  text ""
+              RulesPage ->
+                  renderRulesPage mod
+              HelpPage ->
+                  renderHelpPage mod
+        , p [] [ pageLinks model.page ]
         , footer
         ]
+
+renderGamePage : Model -> Html Msg
+renderGamePage model =
+    let renderInfo = model.renderInfo
+        cellSize = renderInfo.cellSize
+        locations = renderInfo.locations
+        listCellSize = if model.mode == SetupMode then
+                           renderInfo.setupCellSize
+                       else
+                           renderInfo.captureCellSize
+        setupLocations = renderInfo.setupLineLocations
+        sels = model.nodeSelections
+        (topsel, boardsel, botsel) =
+            case model.mode of
+                SetupMode ->
+                    case model.player of
+                        WhitePlayer ->
+                            (sels, [], [])
+                        BlackPlayer ->
+                            ([], [], sels)
+                _ ->
+                    ([], sels, [])
+        modNodeMsg = nodeMsg model
+    in
+        div []
+            [ Board.render
+                  model.topList setupLocations listCellSize topsel modNodeMsg
+            , br
+            , Board.render
+                model.board locations cellSize boardsel modNodeMsg
+            , br
+            , Board.render
+            model.bottomList setupLocations listCellSize botsel modNodeMsg
+            ]
 
 footer : Html Msg
 footer =
