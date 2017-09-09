@@ -9,12 +9,14 @@
 --
 ----------------------------------------------------------------------
 
-module Archmage.Types exposing ( Page(..), Msg(..), Piece(..), Board, Node
+module Archmage.Types exposing ( GameState, Page(..), Msg(..), Piece(..), Board, Node
                                , NodeSelection, ColoredPiece
                                , Point, PointDict, RenderInfo, Mode(..)
-                               , Color(..), NodeMsg, ClickKind(..), WhichBoard(..)
+                               , Color(..), Player(..)
+                               , NodeMsg, ClickKind(..), WhichBoard(..)
                                , Move, MovesDict, Direction(..)
                                , setBoardPiece
+                               , otherColor, playerColor, otherPlayer
                                , pieceList, pieceToAbbreviation, abbreviationToPiece
                                , rowLetters, zeroPoint
                                , get, set, butLast, adjoin
@@ -145,6 +147,17 @@ type alias Board =
     , nodes: Dict String Node
     }
 
+type alias GameState =
+    { player : Player
+    , mode : Mode
+    , isFirstMove : Bool
+    , actor : Maybe Node
+    , subject : Maybe Node
+    , board : Board
+    , topList : Board
+    , bottomList : Board
+    }
+
 setBoardPiece : String -> Maybe ColoredPiece -> Board -> Board
 setBoardPiece name piece board =
     let uname = String.toUpper name
@@ -202,6 +215,28 @@ type alias RenderInfo =
 type Color
     = Black
     | White
+
+otherColor : Color -> Color
+otherColor color =
+    case color of
+        White -> Black
+        Black -> White
+
+type Player
+    = WhitePlayer
+    | BlackPlayer
+
+playerColor : Player -> Color
+playerColor player =
+    case player of
+        WhitePlayer -> White
+        BlackPlayer -> Black
+
+otherPlayer : Player -> Player
+otherPlayer player =
+    case player of
+        WhitePlayer -> BlackPlayer
+        BlackPlayer -> WhitePlayer
 
 type alias Move =
     { actor: Node

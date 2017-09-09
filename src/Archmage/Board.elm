@@ -9,7 +9,7 @@
 --
 ----------------------------------------------------------------------
 
-module Archmage.Board exposing ( initialBoard, renderInfo, render
+module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, render
                                , whiteSetupBoard, blackSetupBoard
                                , initialCaptureBoard
                                , getNode, setNode
@@ -23,7 +23,8 @@ module Archmage.Board exposing ( initialBoard, renderInfo, render
                                )
 
 import Archmage.Types as Types
-    exposing ( Msg(..), Board, Node, NodeSelection
+    exposing ( GameState, Msg(..), Board, Node, NodeSelection
+             , Player(..)
              , Point, PointDict, RenderInfo, Mode(..)
              , Color(..), Piece(..), ColoredPiece, NodeMsg, Move, MovesDict
              , Direction(..)
@@ -150,6 +151,28 @@ initialCaptureBoard =
         , nodes = nodes
         }
         
+initialGameState : Bool -> GameState
+initialGameState doPlaceAll =
+    let res = { player = WhitePlayer
+              , mode = SetupMode
+              , isFirstMove = True
+              , actor = Nothing
+              , subject = Nothing
+              , board = initialBoard
+              , topList = whiteSetupBoard
+              , bottomList = blackSetupBoard
+              }
+    in
+        if not doPlaceAll then
+            res
+        else
+            { res
+                | mode = ChooseActorMode
+                , board = dummyBoard
+                , topList = initialCaptureBoard
+                , bottomList = initialCaptureBoard
+            }
+
 renderInfo : Int -> RenderInfo
 renderInfo cellSize =
     let setupCellSize = (cellSize * 2) // 3

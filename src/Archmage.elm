@@ -12,14 +12,16 @@
 module Archmage exposing (..)
 
 import Archmage.Types as Types
-    exposing ( Piece(..), Color(..), ColoredPiece, Board, Node
+    exposing ( GameState, Piece(..), Color(..), Player(..)
+             , ColoredPiece, Board, Node
              , NodeSelection, RenderInfo
              , Page(..), Msg(..), Mode(..), ClickKind(..), WhichBoard(..)
              , NodeMsg, MovesDict
+             , otherColor, playerColor, otherPlayer
              , setBoardPiece, pieceToAbbreviation
              )
 import Archmage.Pieces exposing ( drawPiece )
-import Archmage.Board as Board exposing ( getNode, printMove )
+import Archmage.Board as Board exposing ( initialGameState, getNode, printMove )
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span )
 import Html.Attributes exposing ( align, src, href, target, style )
@@ -32,42 +34,13 @@ import List.Extra as LE
 import Task
 import Debug exposing ( log )
 
-type Player
-    = WhitePlayer
-    | BlackPlayer
-
-playerColor : Player -> Color
-playerColor player =
-    case player of
-        WhitePlayer -> White
-        BlackPlayer -> Black
-
-otherPlayer : Player -> Player
-otherPlayer player =
-    case player of
-        WhitePlayer -> BlackPlayer
-        BlackPlayer -> WhitePlayer
-
-otherColor : Color -> Color
-otherColor color =
-    case color of
-        White -> Black
-        Black -> White
-
 type alias Model =
     { page : Page
-    , mode : Mode
-    , isFirstMove : Bool
-    , player : Player
     , moves : MovesDict
     , nodeSelections : List NodeSelection
-    , actor : Maybe Node
-    , subject : Maybe Node
-    , board : Board
-    , topList : Board
-    , bottomList : Board
     , renderInfo : RenderInfo
     , message : Maybe String
+    , gs : GameState
     }
 
 main =
@@ -98,35 +71,38 @@ messages =
 
 setMessage : Model -> Model
 setMessage model =
-    case Types.get model.mode messages of
-        Nothing ->
-            { model | message = Nothing }
-        Just message ->
-            let c = case model.player of
-                        WhitePlayer -> "White, "
-                        BlackPlayer -> "Black, "
-                msg = case model.mode of
-                          GameOverMode ->
-                              message
-                          _ ->
-                              let suffix = if model.isFirstMove then
-                                               "."
-                                           else
-                                               case model.mode of
-                                                   ChooseActorMode ->
-                                                       " or the black center square."
-                                                   _ ->
-                                                       "."
-                              in
-                                  c ++ message ++ suffix
+    let gs = model.gs
+    in
+        case Types.get gs.mode messages of
+            Nothing ->
+                { model | message = Nothing }
+            Just message ->
+                let c = case gs.player of
+                            WhitePlayer -> "White, "
+                            BlackPlayer -> "Black, "
+                    msg = case gs.mode of
+                              GameOverMode ->
+                                  message
+                              _ ->
+                                  let suffix = if gs.isFirstMove then
+                                                   "."
+                                               else
+                                                   case gs.mode of
+                                                       ChooseActorMode ->
+                                                           " or the black center square."
+                                                       _ ->
+                                                           "."
+                                  in
+                                      c ++ message ++ suffix
             in
                 { model | message = Just <| msg }
 
 initialPlacementSelections : Player -> Model -> List NodeSelection
 initialPlacementSelections player model =
-    let board = case player of
-                    WhitePlayer -> model.topList
-                    BlackPlayer -> model.bottomList
+    let gs = model.gs
+        board = case player of
+                    WhitePlayer -> gs.topList
+                    BlackPlayer -> gs.bottomList
         nodes = Dict.values board.nodes
                 |> List.sortBy .column
     in
@@ -143,44 +119,33 @@ doPlaceAll = False --True
 init : ( Model, Cmd Msg )
 init =
     let mod = { page = GamePage
-              , mode = SetupMode
-              , isFirstMove = True
-              , player = WhitePlayer
               , moves = Dict.empty
               , nodeSelections = []
-              , actor = Nothing
-              , subject = Nothing
-              , board = Board.initialBoard
-              , topList = Board.whiteSetupBoard
-              , bottomList = Board.blackSetupBoard
               , renderInfo = Board.renderInfo pieceSize
               , message = Nothing
+              , gs = initialGameState doPlaceAll
               }
         model = if not doPlaceAll then
                     { mod
-                        | nodeSelections = initialPlacementSelections mod.player mod
+                        | nodeSelections = initialPlacementSelections mod.gs.player mod
                     }
                 else
-                    findValidMoves
-                    { mod
-                        | board = Board.dummyBoard
-                        , topList = Board.initialCaptureBoard
-                        , bottomList = Board.initialCaptureBoard
-                        , mode = ChooseActorMode
-                    }
+                    findValidMoves mod
     in
         ( model, Cmd.none )
 
 whichBoard : WhichBoard -> Model -> Board
 whichBoard which model =
     case which of
-        TopList -> model.topList
-        BottomList -> model.bottomList
-        MainBoard -> model.board
+        TopList -> model.gs.topList
+        BottomList -> model.gs.bottomList
+        MainBoard -> model.gs.board
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case log "" msg of
+        NewGame ->
+            init
         SetPage page ->
             ( { model | page = page }
             , Cmd.none
@@ -194,16 +159,21 @@ update msg model =
                     , Cmd.none
                     )
                 EmptyBoardClick ->
-                    case model.mode of
+                    case model.gs.mode of
                         SetupMode ->
                             setupEmptyBoardClick which node model
                         _ ->
                             (model, Cmd.none)
                 OtherPlayerClick ->
-                    ( findValidMoves
+                    ( let gs = model.gs
+                          gs2 = { gs
+                                    | player = otherPlayer gs.player
+                                    , isFirstMove = True
+                                }
+                      in
+                          findValidMoves
                           { model
-                              | player = otherPlayer model.player
-                              , isFirstMove = True
+                              | gs = gs2
                           }
                     , Cmd.none
                     )
@@ -219,25 +189,32 @@ update msg model =
                                                   )
                                              )
                                         moves
+                        gs = model.gs
+                        gs2 = { gs
+                                  | mode = ChooseSubjectMode
+                                  , actor = Just node
+                              }
                     in
                         ( { model
-                              | mode = ChooseSubjectMode
-                              , actor = Just node
+                              | gs = gs2
                               , nodeSelections =
                                 (actorSelectionColor, node.name) :: subjectSelections
                           }
                         , Cmd.none
                         )
                 UnchooseActorClick ->
-                    ( findValidMoves
-                          { model
-                              | mode = ChooseActorMode
-                              , subject = Nothing
-                          }
-                    , Cmd.none
-                    )
+                    let gs = model.gs
+                    in
+                        ( findValidMoves
+                              { model
+                                  | gs = { gs | mode = ChooseActorMode 
+                                         , subject = Nothing
+                                         }
+                              }
+                        , Cmd.none
+                        )
                 ChooseSubjectClick ->
-                    let actorName = case model.actor of
+                    let actorName = case model.gs.actor of
                                         Just actor ->
                                             actor.name
                                         Nothing ->
@@ -258,10 +235,14 @@ update msg model =
                                                       )
                                                  )
                                             targetMoves
+                        gs = model.gs
+                        gs2 = { gs
+                                  | mode = ChooseTargetMode
+                                  , subject = Just node
+                              }
                     in
                         ( { model
-                              | mode = ChooseTargetMode
-                              , subject = Just node
+                              | gs = gs2
                               , nodeSelections =
                                 List.append
                                     [ (actorSelectionColor, actorName)
@@ -272,14 +253,15 @@ update msg model =
                         , Cmd.none
                         )
                 UnchooseSubjectClick ->
-                    case model.actor of
+                    case model.gs.actor of
                         Nothing ->
                             (model, Cmd.none) --can't happen
                         Just actor ->
-                            update (NodeClick ChooseActorClick MainBoard actor)
-                                { model
-                                    | mode = ChooseActorMode
-                                }
+                            let gs = model.gs
+                                gs2 = { gs | mode = ChooseActorMode }
+                            in
+                                update (NodeClick ChooseActorClick MainBoard actor)
+                                    { model | gs = gs2 }
                 ChooseTargetClick ->
                     chooseTargetClick node model
         _ ->
@@ -287,41 +269,48 @@ update msg model =
 
 chooseTargetClick : Node -> Model -> (Model, Cmd Msg)
 chooseTargetClick target model =
-    case model.subject of
+    case model.gs.subject of
         Nothing ->
             (model, Cmd.none)   --can't happen
         Just subject ->
-            let b = case model.actor of
+            let b = case model.gs.actor of
                         Nothing ->
-                            model.board --can't happen
+                            model.gs.board --can't happen
                         Just actor ->
                             case actor.piece of
                                 Nothing ->
-                                    model.board --can't happen
+                                    model.gs.board --can't happen
                                 Just (color, piece) ->
                                     setBoardPiece
                                         actor.name
                                         (Just (otherColor color, piece))
-                                        model.board
+                                        model.gs.board
                 b2 = setBoardPiece subject.name Nothing b
+                gs = model.gs
                 mod = case target.piece of
                           Just _ ->
                               addPieceToCaptureBoard subject.piece
-                                  { model | board = b2 }
+                                  { model |
+                                        gs = { gs | board = b2 }
+                                  }
                           Nothing ->
                               { model |
-                                    board =
-                                        setBoardPiece
-                                            target.name
-                                            subject.piece
-                                            b2
+                                    gs = { gs | board =
+                                                  setBoardPiece
+                                                      target.name
+                                                      subject.piece
+                                                      b2
+                                         }
                               }
+                gs2 = mod.gs
             in
                 ( findValidMoves
                       { mod
-                          | mode = ChooseActorMode
-                          , isFirstMove = False
-                          , subject = Nothing
+                          | gs = { gs2
+                                     | mode = ChooseActorMode
+                                     , isFirstMove = False
+                                     , subject = Nothing
+                                 }
                       }
                 , Cmd.none
                 )
@@ -333,8 +322,8 @@ addPieceToCaptureBoard coloredPiece model =
             model
         Just (color, piece) ->
             let board = case color of
-                            Black -> model.topList
-                            White -> model.bottomList
+                            Black -> model.gs.topList
+                            White -> model.gs.bottomList
                 letter = pieceToAbbreviation piece
                 maybeName = letter ++ "1"
                 name = case getNode maybeName board of
@@ -346,12 +335,17 @@ addPieceToCaptureBoard coloredPiece model =
                                else
                                    letter ++ "2"
                 newBoard = setBoardPiece name coloredPiece board
+                gs = model.gs
             in
                 case color of
                     Black ->
-                        { model | topList = newBoard }
+                        { model
+                            | gs = { gs | topList = newBoard }
+                        }
                     White ->
-                        { model | bottomList = newBoard }
+                        { model
+                            | gs = { gs | bottomList = newBoard }
+                        }
 
 setupEmptyBoardClick : WhichBoard -> Node -> Model -> (Model, Cmd Msg)
 setupEmptyBoardClick which node model =
@@ -360,49 +354,55 @@ setupEmptyBoardClick which node model =
             (model, Cmd.none)
         (_, sn) :: _ ->
             let board = whichBoard which model
-                mod = case which of
+                gs = model.gs
+                gs2 = case which of
                           TopList ->
-                              { model
+                              { gs
                                   | topList =
                                     setBoardPiece
                                     sn Nothing board
                               }
                           BottomList ->
-                              { model
+                              { gs
                                   | bottomList =
                                     setBoardPiece
                                     sn Nothing board
                               }
                           _ ->
-                              model
+                              gs
                 player = case which of
                              TopList -> BlackPlayer
                              BottomList -> WhitePlayer
-                             _ -> mod.player
+                             _ -> gs2.player
                 selections = initialPlacementSelections player model
                 list = case which of
-                           TopList -> model.topList
-                           _ -> model.bottomList
+                           TopList -> model.gs.topList
+                           _ -> model.gs.bottomList
                 piece = case getNode sn list of
                             Nothing -> Nothing
                             Just n -> n.piece
-                mod2 = { mod
-                           | board =
-                               setBoardPiece node.name piece mod.board
-                           , nodeSelections = selections
+                gs3 = { gs2
+                          | board =
+                               setBoardPiece node.name piece gs2.board
                            , player = player
                            , mode = if selections == [] then
                                         ChooseActorMode
                                     else
                                         SetupMode
+                      }
+                mod2 = { model
+                           | nodeSelections = selections
+                           , gs = gs3
                        }
-                mod3 = if mod2.mode == SetupMode then
+                mod3 = if gs2.mode == SetupMode then
                            mod2
                        else
                            findValidMoves
                            { mod2
-                               | topList = Board.initialCaptureBoard
-                               , bottomList = Board.initialCaptureBoard
+                               | gs = { gs3
+                                          | topList = Board.initialCaptureBoard
+                                          , bottomList = Board.initialCaptureBoard
+                                      }
                            }
             in
                 ( mod3 , Cmd.none )
@@ -410,24 +410,30 @@ setupEmptyBoardClick which node model =
 
 findValidMoves : Model -> Model
 findValidMoves model =
-    let moves = Board.validMoves (playerColor model.player) model.board
+    let gs = model.gs
+        moves = Board.validMoves (playerColor gs.player) gs.board
     in
         case highlightActors moves model of
             Just m ->
                 { m | moves = moves }
             Nothing ->
-                let player = otherPlayer model.player
-                    otherMoves = Board.validMoves (playerColor player) model.board
-                    mod = { model
+                let player = otherPlayer gs.player
+                    otherMoves = Board.validMoves (playerColor player) gs.board
+                    gs2 = { gs
                               | isFirstMove = True
                               , player = player
+                          }
+                    mod = { model
+                              | gs = gs2
                               , moves = otherMoves
                           }
                 in
                     case highlightActors otherMoves mod of
                         Nothing ->
                             { mod
-                                | mode = GameOverMode
+                                | gs = { gs
+                                           | mode = GameOverMode
+                                       }
                                 , nodeSelections = []
                             }
                         Just m2 ->
@@ -443,7 +449,7 @@ highlightActors moves model =
                      | nodeSelections =
                          List.concat
                              [ List.map (\key -> (actorSelectionColor, key)) keys
-                             , if model.isFirstMove then
+                             , if model.gs.isFirstMove then
                                    []
                                else
                                    [(otherPlayerSelectionColor, "D3")]
@@ -486,23 +492,24 @@ nodeMsg : Model -> NodeMsg
 nodeMsg model board node =
     let piece = node.piece
         name = node.name
+        gs = model.gs
     in
-        case model.mode of
+        case gs.mode of
             GameOverMode ->
                 Nothing
             SetupMode ->
-                let which = case model.player of
+                let which = case gs.player of
                                 WhitePlayer -> TopList
                                 BlackPlayer -> BottomList
                 in
-                    if board == model.board then
+                    if board == gs.board then
                         if node.piece == Nothing && model.nodeSelections /= [] then
                             Just <| NodeClick EmptyBoardClick which node
                         else
                             Nothing
                     else if piece /= Nothing then
-                        if (model.player == WhitePlayer && board == model.topList) ||
-                            (model.player == BlackPlayer && board == model.bottomList)
+                        if (gs.player == WhitePlayer && board == gs.topList) ||
+                            (gs.player == BlackPlayer && board == gs.bottomList)
                         then
                             Just <| NodeClick SetupBoardClick which node
                         else
@@ -516,7 +523,7 @@ nodeMsg model board node =
                     Just (_, piece) ->
                         case piece of
                             CenterHolePiece ->
-                                if model.isFirstMove then
+                                if model.gs.isFirstMove then
                                     Nothing
                                 else
                                     Just
@@ -646,18 +653,19 @@ renderGamePage model =
     let renderInfo = model.renderInfo
         cellSize = renderInfo.cellSize
         locations = renderInfo.locations
-        listCellSize = if model.mode == SetupMode then
+        gs = model.gs
+        listCellSize = if gs.mode == SetupMode then
                            renderInfo.setupCellSize
                        else
                            renderInfo.captureCellSize
-        setupLocations = case model.mode of
+        setupLocations = case gs.mode of
                              SetupMode -> renderInfo.setupLineLocations
                              _ -> renderInfo.captureLineLocations
         sels = model.nodeSelections
         (topsel, boardsel, botsel) =
-            case model.mode of
+            case gs.mode of
                 SetupMode ->
-                    case model.player of
+                    case gs.player of
                         WhitePlayer ->
                             (sels, [], [])
                         BlackPlayer ->
@@ -668,14 +676,23 @@ renderGamePage model =
     in
         div []
             [ Board.render
-                  model.topList setupLocations listCellSize topsel modNodeMsg
+                  gs.topList setupLocations listCellSize topsel modNodeMsg
             , br
             , Board.render
-                model.board locations cellSize boardsel modNodeMsg
+                gs.board locations cellSize boardsel modNodeMsg
             , br
             , Board.render
-                model.bottomList setupLocations listCellSize botsel modNodeMsg
+                gs.bottomList setupLocations listCellSize botsel modNodeMsg
+            , newGameButton
             ]
+
+newGameButton : Html Msg
+newGameButton =
+    p []
+        [ button [ onClick NewGame ]
+              [ text "New Game" ]
+        ]
+
 
 footer : Html Msg
 footer =
