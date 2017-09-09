@@ -394,7 +394,7 @@ setupEmptyBoardClick which node model =
                            | nodeSelections = selections
                            , gs = gs3
                        }
-                mod3 = if gs2.mode == SetupMode then
+                mod3 = if gs3.mode == SetupMode then
                            mod2
                        else
                            findValidMoves
