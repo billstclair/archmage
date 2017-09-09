@@ -34,8 +34,11 @@ type Page
 type ClickKind
     = EmptyBoardClick
     | ChooseActorClick
+    | UnchooseActorClick
     | ChooseSubjectClick
+    | UnchooseSubjectClick
     | ChooseTargetClick
+    | UnchooseTargetClick
     | SetupBoardClick
 
 type WhichBoard

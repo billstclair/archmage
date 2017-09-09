@@ -218,6 +218,48 @@ update msg model =
                           }
                         , Cmd.none
                         )
+                UnchooseActorClick ->
+                    ( findValidMoves
+                          { model
+                              | mode = ChooseActorMode
+                              , subject = Nothing
+                          }
+                    , Cmd.none)
+                ChooseSubjectClick ->
+                    let actorName = case model.actor of
+                                        Just actor ->
+                                            actor.name
+                                        Nothing ->
+                                            "H0" --can't happen
+                        targetSelections =
+                            case Dict.get actorName model.moves of
+                                Nothing ->
+                                    []
+                                Just moves ->
+                                    let targetMoves =
+                                            List.filter
+                                                (\move -> move.subject == node)
+                                                moves
+                                    in
+                                        List.map (\move ->
+                                                      ( targetSelectionColor
+                                                      , move.target.name
+                                                      )
+                                                 )
+                                            targetMoves
+                    in
+                        ( { model
+                              | mode = ChooseTargetMode
+                              , subject = Just node
+                              , nodeSelections =
+                                List.append
+                                    [ (actorSelectionColor, actorName)
+                                    , (subjectSelectionColor, node.name)
+                                    ]
+                                    targetSelections
+                          }
+                        , Cmd.none
+                        )
                 _ ->
                     (model, Cmd.none)
         _ ->
@@ -262,7 +304,6 @@ setupEmptyBoardClick which node model =
                            , nodeSelections = selections
                            , player = player
                            , mode = if selections == [] then
-                                        -- Need to compute selections
                                         ChooseActorMode
                                     else
                                         SetupMode
@@ -338,6 +379,10 @@ nbsp : String
 nbsp =
     String.fromChar <| Char.fromCode 160
 
+findSelection : String -> Model -> Maybe NodeSelection
+findSelection name model =
+    LE.find (\(_, nn) -> name == nn) model.nodeSelections
+
 -- TODO
 nodeMsg : Model -> NodeMsg
 nodeMsg model board node =
@@ -371,13 +416,26 @@ nodeMsg model board node =
                     Nothing ->
                         Nothing
                     Just _ ->
-                        case LE.find (\(_, nn) -> name == nn) model.nodeSelections of
+                        case findSelection name model of
                             Nothing ->
                                 Nothing
                             _ ->
                                 Just <| NodeClick ChooseActorClick MainBoard node
             ChooseSubjectMode ->
-                Nothing
+                case piece of
+                    Nothing ->
+                        Nothing
+                    Just _ ->
+                        case findSelection name model of
+                            Nothing ->
+                                Nothing
+                            Just (color, _) ->
+                                if color == actorSelectionColor then
+                                    Just <| NodeClick UnchooseActorClick MainBoard node
+                                else if color == subjectSelectionColor then
+                                    Just <| NodeClick ChooseSubjectClick MainBoard node
+                                else
+                                    Nothing
             ChooseTargetMode ->
                 Nothing
 

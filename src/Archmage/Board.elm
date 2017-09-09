@@ -849,7 +849,7 @@ dummyPlacements =
     , ("d1", (White, TowerPiece))
     , ("d2", (Black, TowerPiece))
     , ("d6", (White, MoonPiece))
-    , ("d5", (Black, MoonPiece))
+    , ("e2", (Black, MoonPiece))
     , ("f1", (White, MagePiece))
     , ("f2", (Black, MagePiece))
     ]
