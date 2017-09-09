@@ -12,7 +12,7 @@
 module Archmage.Board exposing ( initialBoard, renderInfo, render
                                , whiteSetupBoard, blackSetupBoard
                                , initialCaptureBoard
-                               , getNode
+                               , getNode, setNode
                                , stringToBoard, boardToString
                                , horizontalNeighbors, diagonalNeighbors
                                , allHorizontalNeighbors, allDiagonalNeighbors
@@ -395,15 +395,11 @@ horizontalNeighbors name =
                                              <| LE.getAt (idx-2) rowLetters
                               in
                                   [[rowAbove ++ scol, twoAbove ++ scol]]
-                        , if col <= 1 then
+                        , if col <= 0 then
                               []
                           else
                               [[ row ++ (toString <| col-1)
-                               , row ++ (if col == 2 then
-                                             "0"
-                                         else
-                                             (toString <| col-2)
-                                        )
+                               , row ++ (toString <| col-2)
                                ]
                               ]
                         , if rowBelow == "" then
@@ -413,11 +409,11 @@ horizontalNeighbors name =
                                              <| LE.getAt (idx+2) rowLetters
                               in
                                   [[rowBelow ++ scol, twoBelow ++ scol]]
-                        , if col >= 7 then
+                        , if col > 5 then
                               []
                           else
                               [[ row ++ (toString <| col+1)
-                               , row ++ (toString <| if col == 6 then 0 else col+2)
+                               , row ++ (toString <| col+2)
                                ]
                               ]
                         ]
@@ -444,19 +440,19 @@ diagonalNeighbors name =
                                              <| LE.getAt (idx-2) rowLetters
                               in
                                   List.concat
-                                      [ if col <= 1 then
+                                      [ if col <= 0 then
                                             []
                                         else
                                             [[ rowAbove ++ (toString <| col-1)
                                               , twoAbove ++ (toString <| col-2)
                                              ]
                                             ]
-                                      , if col >= 7 then
+                                      , if col > 5 then
                                             []
                                         else
                                             [[ rowAbove ++ (toString <| col+1)
                                               , twoAbove ++
-                                                   (if col == 6 then
+                                                   (if col == 5 then
                                                         "0"
                                                     else (toString <| col+2)
                                                    )
@@ -470,19 +466,19 @@ diagonalNeighbors name =
                                              <| LE.getAt (idx+2) rowLetters
                               in
                                   List.concat
-                                      [ if col <= 1 then
+                                      [ if col <= 0 then
                                             []
                                         else
                                             [[ rowBelow ++ (toString <| col-1)
                                              , twoBelow ++ (toString <| col-2)
                                              ]
                                             ]
-                                      , if col >= 7 then
+                                      , if col > 5 then
                                             []
                                         else
                                             [[ rowBelow ++ (toString <| col+1)
                                              , twoBelow ++
-                                                 (if col == 6 then
+                                                 (if col == 5 then
                                                       "0"
                                                   else
                                                       (toString <| col+2)
@@ -538,7 +534,7 @@ allHorizontalNeighbors name =
                              List.reverse res
                          else
                              rightLoop r (c+1)
-                                 <| (r ++ (if c == 6 then "0" else (toString <| c+1)))
+                                 <| (r ++ (toString <| c+1))
                                     :: res
                     )
     in
@@ -572,11 +568,11 @@ allDiagonalNeighbors name =
                                             <| LE.getAt (i-1) rowLetters
                              in
                                  aboveLoop (i-1) (cl-1) (cr+1)
-                                     ( if cl < 1 then
+                                     ( if cl < 0 then
                                            left
                                        else
                                            (rowAbove ++ (toString (cl-1))) :: left
-                                     , if cr > 7 then
+                                     , if cr > 6 then
                                            right
                                        else
                                            (rowAbove ++ (toString (cr+1))) :: right
@@ -584,18 +580,18 @@ allDiagonalNeighbors name =
                     )
         belowLoop : Int -> Int -> Int -> (List String, List String) -> (List String, List String)
         belowLoop = (\i cl cr (left, right) ->
-                         if i > 7 then
+                         if i > 6 then
                              (List.reverse left, List.reverse right)
                          else
                              let rowBelow = Maybe.withDefault " "
                                             <| LE.getAt (i+1) rowLetters
                              in
                                  belowLoop (i+1) (cl-1) (cr+1)
-                                     ( if cl < 1 then
+                                     ( if cl < 0 then
                                            left
                                        else
                                            (rowBelow ++ (toString (cl-1))) :: left
-                                     , if cr > 7 then
+                                     , if cr > 6 then
                                            right
                                        else
                                            (rowBelow ++
@@ -790,6 +786,11 @@ findPushMove actor nodes =
                                 _ ->
                                     case b.piece of
                                         Nothing ->
+                                           Just { actor = actor
+                                                , subject = a
+                                                , target = b
+                                                }
+                                        Just (_, CenterHolePiece) ->
                                            Just { actor = actor
                                                 , subject = a
                                                 , target = b

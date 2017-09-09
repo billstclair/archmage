@@ -12,14 +12,14 @@
 module Archmage exposing (..)
 
 import Archmage.Types as Types
-    exposing ( Piece(..), Color(..), Board, Node
+    exposing ( Piece(..), Color(..), ColoredPiece, Board, Node
              , NodeSelection, RenderInfo
              , Page(..), Msg(..), Mode(..), ClickKind(..), WhichBoard(..)
              , NodeMsg, MovesDict
-             , setBoardPiece
+             , setBoardPiece, pieceToAbbreviation
              )
 import Archmage.Pieces exposing ( drawPiece )
-import Archmage.Board as Board exposing ( getNode )
+import Archmage.Board as Board exposing ( getNode, printMove )
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span )
 import Html.Attributes exposing ( align, src, href, target, style )
@@ -47,6 +47,12 @@ otherPlayer player =
     case player of
         WhitePlayer -> BlackPlayer
         BlackPlayer -> WhitePlayer
+
+otherColor : Color -> Color
+otherColor color =
+    case color of
+        White -> Black
+        Black -> White
 
 type alias Model =
     { page : Page
@@ -268,10 +274,87 @@ update msg model =
                           }
                         , Cmd.none
                         )
-                _ ->
-                    (model, Cmd.none)
+                UnchooseSubjectClick ->
+                    case model.actor of
+                        Nothing ->
+                            (model, Cmd.none) --can't happen
+                        Just actor ->
+                            update (NodeClick ChooseActorClick MainBoard actor)
+                                { model
+                                    | mode = ChooseActorMode
+                                }
+                ChooseTargetClick ->
+                    chooseTargetClick node model
         _ ->
             ( model, Cmd.none )
+
+chooseTargetClick : Node -> Model -> (Model, Cmd Msg)
+chooseTargetClick target model =
+    case model.subject of
+        Nothing ->
+            (model, Cmd.none)   --can't happen
+        Just subject ->
+            let b = case model.actor of
+                        Nothing ->
+                            model.board --can't happen
+                        Just actor ->
+                            case actor.piece of
+                                Nothing ->
+                                    model.board --can't happen
+                                Just (color, piece) ->
+                                    setBoardPiece
+                                        actor.name
+                                        (Just (otherColor color, piece))
+                                        model.board
+                b2 = setBoardPiece subject.name Nothing b
+                mod = case target.piece of
+                          Just _ ->
+                              addPieceToCaptureBoard subject.piece
+                                  { model | board = b2 }
+                          Nothing ->
+                              { model |
+                                    board =
+                                        setBoardPiece
+                                            target.name
+                                            subject.piece
+                                            b2
+                              }
+            in
+                ( findValidMoves
+                      { mod
+                          | mode = ChooseActorMode
+                          , isFirstMove = False
+                          , subject = Nothing
+                      }
+                , Cmd.none
+                )
+
+addPieceToCaptureBoard : Maybe ColoredPiece -> Model -> Model
+addPieceToCaptureBoard coloredPiece model =
+    case coloredPiece of
+        Nothing ->
+            model
+        Just (color, piece) ->
+            let board = case color of
+                            Black -> model.topList
+                            White -> model.bottomList
+                letter = pieceToAbbreviation piece
+                maybeName = letter ++ "1"
+                name = case getNode maybeName board of
+                           Nothing ->
+                               maybeName --can't happen
+                           Just node ->
+                               if node.piece == Nothing then
+                                   maybeName
+                               else
+                                   letter ++ "2"
+                newBoard = setBoardPiece name coloredPiece board
+            in
+                case color of
+                    Black ->
+                        { model | topList = newBoard }
+                    White ->
+                        { model | bottomList = newBoard }
 
 setupEmptyBoardClick : WhichBoard -> Node -> Model -> (Model, Cmd Msg)
 setupEmptyBoardClick which node model =
@@ -338,14 +421,18 @@ findValidMoves model =
             Nothing ->
                 let player = otherPlayer model.player
                     otherMoves = Board.validMoves (playerColor player) model.board
-                    m = { model
-                            | player = player
-                            , moves = moves
-                        }
+                    mod = { model
+                              | isFirstMove = True
+                              , player = player
+                              , moves = otherMoves
+                          }
                 in
-                    case highlightActors otherMoves m of
+                    case highlightActors otherMoves mod of
                         Nothing ->
-                            { m | mode = GameOverMode }
+                            { mod
+                                | mode = GameOverMode
+                                , nodeSelections = []
+                            }
                         Just m2 ->
                             m2
 
@@ -445,7 +532,16 @@ nodeMsg model board node =
                                 else
                                     Nothing
             ChooseTargetMode ->
-                Nothing
+                case findSelection name model of
+                    Nothing ->
+                        Nothing
+                    Just (color, _) ->
+                        if color == actorSelectionColor then
+                            Just <| NodeClick UnchooseActorClick MainBoard node
+                        else if color == subjectSelectionColor then
+                            Just <| NodeClick UnchooseSubjectClick MainBoard node
+                        else
+                            Just <| NodeClick ChooseTargetClick MainBoard node
 
 playButton : Html Msg
 playButton =
@@ -542,7 +638,9 @@ renderGamePage model =
                            renderInfo.setupCellSize
                        else
                            renderInfo.captureCellSize
-        setupLocations = renderInfo.setupLineLocations
+        setupLocations = case model.mode of
+                             SetupMode -> renderInfo.setupLineLocations
+                             _ -> renderInfo.captureLineLocations
         sels = model.nodeSelections
         (topsel, boardsel, botsel) =
             case model.mode of
@@ -564,7 +662,7 @@ renderGamePage model =
                 model.board locations cellSize boardsel modNodeMsg
             , br
             , Board.render
-            model.bottomList setupLocations listCellSize botsel modNodeMsg
+                model.bottomList setupLocations listCellSize botsel modNodeMsg
             ]
 
 footer : Html Msg

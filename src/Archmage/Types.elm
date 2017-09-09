@@ -38,7 +38,6 @@ type ClickKind
     | ChooseSubjectClick
     | UnchooseSubjectClick
     | ChooseTargetClick
-    | UnchooseTargetClick
     | SetupBoardClick
 
 type WhichBoard

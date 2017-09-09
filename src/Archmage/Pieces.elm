@@ -359,5 +359,9 @@ drawPiece piece color ix iy size colorInset =
                        , strokeWidth "0"
                        ]
                   []
-            , pieceBody piece color radius radius radius
+            , pieceBody piece color radius radius
+                <| if piece == CenterHolePiece then
+                       radius - colorInset - 1
+                   else
+                       radius
             ]
