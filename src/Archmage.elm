@@ -84,9 +84,21 @@ setMessage model =
                 let c = case gs.player of
                             WhitePlayer -> "White, "
                             BlackPlayer -> "Black, "
-                    msg = c ++ message
-            in
-                { model | message = Just <| msg }
+                    msg2 = if gs.mode == ChooseActorMode
+                             && Dict.isEmpty model.moves
+                           then
+                               if gs.turnMoves == [] then
+                                   "no moves are possible. Click \"End Turn\"."
+                               else
+                                   "no moves are possible. Undo or click \"End Turn\"."
+                           else
+                               message
+                    msg = if gs.mode == GameOverMode then
+                              message
+                          else
+                              c ++ msg2
+                in
+                    { model | message = Just <| msg }
 
 initialPlacementSelections : Player -> Model -> List NodeSelection
 initialPlacementSelections player model =
@@ -121,7 +133,7 @@ init =
                         | nodeSelections = initialPlacementSelections mod.gs.player mod
                     }
                 else
-                    findValidMoves mod
+                    findValidMoves True mod
     in
         ( model, Cmd.none )
 
@@ -144,7 +156,7 @@ update msg model =
         Undo ->
             case model.gs.turnMoves of
                 TheGameState gs :: _ ->
-                    ( findValidMoves { model | gs = gs }
+                    ( findValidMoves False { model | gs = gs }
                     , Cmd.none
                     )
                 _ ->
@@ -172,10 +184,7 @@ update msg model =
                                     , turnMoves = []
                                 }
                       in
-                          findValidMoves
-                          { model
-                              | gs = gs2
-                          }
+                          findValidMoves True { model | gs = gs2 }
                     , Cmd.none
                     )
                 ChooseActorClick ->
@@ -207,6 +216,7 @@ update msg model =
                     let gs = model.gs
                     in
                         ( findValidMoves
+                              False
                               { model
                                   | gs = { gs | mode = ChooseActorMode 
                                          , subject = Nothing
@@ -265,6 +275,7 @@ update msg model =
                                     { model | gs = gs2 }
                 ChooseTargetClick ->
                     ( findValidMoves
+                          False
                           { model
                               | gs = makeMove node.name model.gs
                           }
@@ -324,47 +335,40 @@ setupEmptyBoardClick which node model =
                            mod2
                        else
                            findValidMoves
-                           { mod2
-                               | gs = { gs3
-                                          | topList = Board.initialCaptureBoard
-                                          , bottomList = Board.initialCaptureBoard
-                                      }
-                           }
+                               True
+                               { mod2
+                                   | gs = { gs3
+                                              | topList = Board.initialCaptureBoard
+                                              , bottomList = Board.initialCaptureBoard
+                                          }
+                               }
             in
                 ( mod3 , Cmd.none )
 
 
-findValidMoves : Model -> Model
-findValidMoves model =
+findValidMoves : Bool -> Model -> Model
+findValidMoves gameOverIfNone model =
     let gs = model.gs
         moves = Board.validMoves (playerColor gs.player) gs.board
+        mod = { model
+                  | moves = moves
+                  , nodeSelections = []
+              }
     in
-        case highlightActors moves model of
+        case highlightActors moves mod of
             Just m ->
-                { m | moves = moves }
+                m
             Nothing ->
-                let player = otherPlayer gs.player
-                    otherMoves = Board.validMoves (playerColor player) gs.board
-                    gs2 = { gs
-                              | isFirstMove = True
-                              , player = player
-                              , turnMoves = []
-                          }
-                    mod = { model
-                              | gs = gs2
-                              , moves = otherMoves
-                          }
-                in
-                    case highlightActors otherMoves mod of
-                        Nothing ->
-                            { mod
-                                | gs = { gs
-                                           | mode = GameOverMode
-                                       }
-                                , nodeSelections = []
-                            }
-                        Just m2 ->
-                            m2
+                if not gameOverIfNone then
+                    mod
+                else
+                    let player = otherPlayer gs.player
+                        otherMoves = Board.validMoves (playerColor player) gs.board
+                    in
+                        if Dict.isEmpty otherMoves then
+                            { mod | gs = { gs | mode = GameOverMode } }
+                        else
+                            mod
 
 highlightActors : MovesDict -> Model -> Maybe Model
 highlightActors moves model =
@@ -505,7 +509,7 @@ endTurnButton : Model -> Html Msg
 endTurnButton model =
     button [ onClick <| otherPlayerClick
            -- Will eventually be disabled during Ko
-           , disabled model.gs.isFirstMove
+           , disabled <| model.gs.isFirstMove && (not <| Dict.isEmpty model.moves)
            ]
         [ text "End Turn" ]
 
