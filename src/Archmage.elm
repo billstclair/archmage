@@ -12,7 +12,7 @@
 module Archmage exposing (..)
 
 import Archmage.Types as Types
-    exposing ( GameState, Piece(..), Color(..), Player(..)
+    exposing ( GameState, TheGameState(..), Piece(..), Color(..), Player(..)
              , ColoredPiece, Board, Node
              , NodeSelection, RenderInfo
              , Page(..), Msg(..), Mode(..), ClickKind(..), WhichBoard(..)
@@ -22,6 +22,7 @@ import Archmage.Types as Types
              )
 import Archmage.Pieces exposing ( drawPiece )
 import Archmage.Board as Board exposing ( initialGameState, getNode, printMove
+                                        , makeMove
                                         , boardToString, stringToBoard
                                         , centerHoleNode
                                         )
@@ -140,6 +141,14 @@ update msg model =
             ( { model | page = page }
             , Cmd.none
             )
+        Undo ->
+            case model.gs.turnMoves of
+                TheGameState gs :: _ ->
+                    ( findValidMoves { model | gs = gs }
+                    , Cmd.none
+                    )
+                _ ->
+                    ( model, Cmd.none )
         NodeClick kind which node ->
             case kind of
                 SetupBoardClick ->
@@ -160,6 +169,7 @@ update msg model =
                                     | player = otherPlayer gs.player
                                     , isFirstMove = True
                                     , mode = ChooseActorMode
+                                    , turnMoves = []
                                 }
                       in
                           findValidMoves
@@ -254,89 +264,14 @@ update msg model =
                                 update (NodeClick ChooseActorClick MainBoard actor)
                                     { model | gs = gs2 }
                 ChooseTargetClick ->
-                    chooseTargetClick node model
+                    ( findValidMoves
+                          { model
+                              | gs = makeMove node.name model.gs
+                          }
+                    , Cmd.none
+                    )
         _ ->
             ( model, Cmd.none )
-
-chooseTargetClick : Node -> Model -> (Model, Cmd Msg)
-chooseTargetClick target model =
-    case model.gs.subject of
-        Nothing ->
-            (model, Cmd.none)   --can't happen
-        Just subject ->
-            let b = case model.gs.actor of
-                        Nothing ->
-                            model.gs.board --can't happen
-                        Just actor ->
-                            case actor.piece of
-                                Nothing ->
-                                    model.gs.board --can't happen
-                                Just (color, piece) ->
-                                    setBoardPiece
-                                        actor.name
-                                        (Just (otherColor color, piece))
-                                        model.gs.board
-                b2 = setBoardPiece subject.name Nothing b
-                gs = model.gs
-                mod = case target.piece of
-                          Just _ ->
-                              addPieceToCaptureBoard subject.piece
-                                  { model |
-                                        gs = { gs | board = b2 }
-                                  }
-                          Nothing ->
-                              { model |
-                                    gs = { gs | board =
-                                                  setBoardPiece
-                                                      target.name
-                                                      subject.piece
-                                                      b2
-                                         }
-                              }
-                gs2 = mod.gs
-            in
-                ( findValidMoves
-                      { mod
-                          | gs = { gs2
-                                     | mode = ChooseActorMode
-                                     , isFirstMove = False
-                                     , subject = Nothing
-                                 }
-                      }
-                , Cmd.none
-                )
-
-addPieceToCaptureBoard : Maybe ColoredPiece -> Model -> Model
-addPieceToCaptureBoard coloredPiece model =
-    case coloredPiece of
-        Nothing ->
-            model
-        Just (color, piece) ->
-            let board = case color of
-                            Black -> model.gs.topList
-                            White -> model.gs.bottomList
-                letter = pieceToAbbreviation piece
-                maybeName = letter ++ "1"
-                name = case getNode maybeName board of
-                           Nothing ->
-                               maybeName --can't happen
-                           Just node ->
-                               if node.piece == Nothing then
-                                   maybeName
-                               else
-                                   letter ++ "2"
-                newBoard = setBoardPiece name coloredPiece board
-                gs = model.gs
-            in
-                case color of
-                    Black ->
-                        { model
-                            | gs = { gs | topList = newBoard }
-                        }
-                    White ->
-                        { model
-                            | gs = { gs | bottomList = newBoard }
-                        }
 
 setupEmptyBoardClick : WhichBoard -> Node -> Model -> (Model, Cmd Msg)
 setupEmptyBoardClick which node model =
@@ -413,6 +348,7 @@ findValidMoves model =
                     gs2 = { gs
                               | isFirstMove = True
                               , player = player
+                              , turnMoves = []
                           }
                     mod = { model
                               | gs = gs2
@@ -575,8 +511,9 @@ endTurnButton model =
 
 undoButton : Model -> Html Msg
 undoButton model =
-    button [ disabled True
-           , title "Not yet implemented."
+    button [ disabled <| model.gs.turnMoves == []
+           , title "Click to undo the last move."
+           , onClick Undo
            ]
         [ text "Undo" ]
 

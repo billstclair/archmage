@@ -17,19 +17,19 @@ module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, ren
                                , stringToBoard, boardToString
                                , horizontalNeighbors, diagonalNeighbors
                                , allHorizontalNeighbors, allDiagonalNeighbors
-                               , validMoves, validMovesForNode
+                               , validMoves, validMovesForNode, makeMove
                                , pieceMoveData, namesToNodes
                                , printNode, printMove, printMoves
                                , dummyBoard
                                )
 
 import Archmage.Types as Types
-    exposing ( GameState, Msg(..), Board, Node, NodeSelection
+    exposing ( GameState, Msg(..), Board, Node, NodeSelection, TheGameState(..)
              , Player(..)
              , Point, PointDict, RenderInfo, Mode(..)
              , Color(..), Piece(..), ColoredPiece, NodeMsg, Move, MovesDict
              , Direction(..)
-             , setBoardPiece
+             , getBoardPiece, setBoardPiece, otherColor
              , pieceList, pieceToAbbreviation, abbreviationToPiece
              , zeroPoint, rowLetters
              , get, set
@@ -174,6 +174,8 @@ initialGameState doPlaceAll =
               , board = initialBoard
               , topList = whiteSetupBoard
               , bottomList = blackSetupBoard
+              , history = []
+              , turnMoves = []
               }
     in
         if not doPlaceAll then
@@ -790,6 +792,89 @@ validMoves color board =
                                        [(node.name, moves)]
                           )
         |> Dict.fromList
+
+nodePiece : Maybe Node -> Maybe ColoredPiece
+nodePiece node =
+    case node of
+        Nothing ->
+            Nothing
+        Just n ->
+            n.piece
+
+makeMove : String -> GameState -> GameState
+makeMove targetName gs =
+    let board = gs.board
+        actor = nodePiece gs.actor
+        subject = nodePiece gs.subject
+        target = getBoardPiece targetName board
+        isCapture = case target of
+                        Nothing ->
+                            False
+                        Just (_, p) ->
+                            p == CenterHolePiece
+    in
+        if actor == Nothing || subject == Nothing ||
+            (target /= Nothing && not isCapture)
+        then
+            gs
+        else
+            let b2 = case actor of
+                         Nothing ->
+                             board --can't happen
+                         Just (c, p) ->
+                             case gs.actor of
+                                 Nothing ->
+                                     board --can't happen
+                                 Just {name} ->
+                                     setBoardPiece
+                                         name (Just (otherColor c, p)) board
+                b3 = case gs.subject of
+                         Nothing ->
+                             b2 --can't happen
+                         Just {name} ->
+                             setBoardPiece name Nothing b2
+                gs3 = if not isCapture then
+                          { gs | board = setBoardPiece targetName subject b3 }
+                      else
+                          let gs2 = { gs | board = b3 }
+                          in
+                              case subject of
+                                  Nothing ->
+                                      gs2 --can't happen
+                                  Just piece ->
+                                      doMoveCapture piece gs2
+            in
+                { gs3
+                    | mode = ChooseActorMode
+                    , isFirstMove = False
+                    , subject = Nothing
+                    , turnMoves = TheGameState { gs | mode = ChooseActorMode }
+                                  :: gs3.turnMoves
+                }
+
+doMoveCapture : ColoredPiece -> GameState -> GameState
+doMoveCapture coloredPiece gs =
+    let (color, piece) = coloredPiece
+        board = case color of
+                    Black -> gs.topList
+                    White -> gs.bottomList
+        letter = pieceToAbbreviation piece
+        maybeName = letter ++ "1"
+        name = case getNode maybeName board of
+                   Nothing ->
+                       maybeName --can't happen
+                   Just node ->
+                       if node.piece == Nothing then
+                           maybeName
+                       else
+                           letter ++ "2"
+        newBoard = setBoardPiece name (Just coloredPiece) board
+    in
+        case color of
+            Black ->
+                { gs | topList = newBoard }
+            White ->
+                { gs | bottomList = newBoard }
 
 type alias PrintedNode =
     (String, Maybe ColoredPiece)

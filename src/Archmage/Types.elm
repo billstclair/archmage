@@ -10,12 +10,12 @@
 ----------------------------------------------------------------------
 
 module Archmage.Types exposing ( GameState, Page(..), Msg(..), Piece(..), Board, Node
-                               , NodeSelection, ColoredPiece
+                               , TheGameState(..), NodeSelection, ColoredPiece
                                , Point, PointDict, RenderInfo, Mode(..)
                                , Color(..), Player(..)
                                , NodeMsg, ClickKind(..), WhichBoard(..)
                                , Move, MovesDict, Direction(..)
-                               , setBoardPiece
+                               , getBoardPiece, setBoardPiece
                                , otherColor, playerColor, otherPlayer
                                , pieceList, pieceToAbbreviation, abbreviationToPiece
                                , rowLetters, zeroPoint
@@ -147,6 +147,9 @@ type alias Board =
     , nodes: Dict String Node
     }
 
+type TheGameState =
+    TheGameState GameState
+
 type alias GameState =
     { player : Player
     , mode : Mode
@@ -156,7 +159,17 @@ type alias GameState =
     , board : Board
     , topList : Board
     , bottomList : Board
+    , history : List String     --boardToString results
+    , turnMoves : List TheGameState
     }
+
+getBoardPiece : String -> Board -> Maybe ColoredPiece
+getBoardPiece name board =
+    case Dict.get (String.toUpper name) board.nodes of
+        Nothing ->
+            Nothing
+        Just node ->
+            node.piece
 
 setBoardPiece : String -> Maybe ColoredPiece -> Board -> Board
 setBoardPiece name piece board =
