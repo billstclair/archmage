@@ -23,10 +23,11 @@ import Archmage.Types as Types
 import Archmage.Pieces exposing ( drawPiece )
 import Archmage.Board as Board exposing ( initialGameState, getNode, printMove
                                         , boardToString, stringToBoard
+                                        , centerHoleNode
                                         )
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span )
-import Html.Attributes exposing ( align, src, href, target, style )
+import Html.Attributes exposing ( align, src, href, target, style, disabled, title )
 import Html.Events exposing ( onClick )
 import Svg exposing ( Svg, svg, g, rect )
 import Svg.Attributes exposing ( x, y, width, height, stroke, strokeWidth, fillOpacity )
@@ -61,13 +62,13 @@ targetSelectionColor = "red"
 
 messages : List (Mode, String)
 messages =
-    [ (SetupMode, "select and place a piece")
+    [ (SetupMode, "select and place a piece.")
     , (ChooseActorMode, "click a " ++ actorSelectionColor
-           ++ "-highighted actor")
+           ++ "-highighted actor.")
     , (ChooseSubjectMode, "click a " ++ subjectSelectionColor
-           ++ "-highlighted subject or the actor")
+           ++ "-highlighted subject or the actor.")
     , (ChooseTargetMode, "click a " ++ targetSelectionColor
-           ++ "-highlighted target, the subject, or the actor")
+           ++ "-highlighted target, the subject, or the actor.")
     , (GameOverMode, "Game Over!")
     ]
 
@@ -82,20 +83,7 @@ setMessage model =
                 let c = case gs.player of
                             WhitePlayer -> "White, "
                             BlackPlayer -> "Black, "
-                    msg = case gs.mode of
-                              GameOverMode ->
-                                  message
-                              _ ->
-                                  let suffix = if gs.isFirstMove then
-                                                   "."
-                                               else
-                                                   case gs.mode of
-                                                       ChooseActorMode ->
-                                                           " or the black center square."
-                                                       _ ->
-                                                           "."
-                                  in
-                                      c ++ message ++ suffix
+                    msg = c ++ message
             in
                 { model | message = Just <| msg }
 
@@ -171,6 +159,7 @@ update msg model =
                           gs2 = { gs
                                     | player = otherPlayer gs.player
                                     , isFirstMove = True
+                                    , mode = ChooseActorMode
                                 }
                       in
                           findValidMoves
@@ -528,8 +517,7 @@ nodeMsg model board node =
                                 if model.gs.isFirstMove then
                                     Nothing
                                 else
-                                    Just
-                                    <| NodeClick OtherPlayerClick MainBoard node
+                                    Just otherPlayerClick
                             _ ->
                                 case findSelection name model of
                                     Nothing ->
@@ -572,6 +560,25 @@ playButton =
                  ]
               [ text "Play" ]
         ]
+
+otherPlayerClick : Msg
+otherPlayerClick =
+    NodeClick OtherPlayerClick MainBoard centerHoleNode
+
+endTurnButton : Model -> Html Msg
+endTurnButton model =
+    button [ onClick <| otherPlayerClick
+           -- Will eventually be disabled during Ko
+           , disabled model.gs.isFirstMove
+           ]
+        [ text "End Turn" ]
+
+undoButton : Model -> Html Msg
+undoButton model =
+    button [ disabled True
+           , title "Not yet implemented."
+           ]
+        [ text "Undo" ]
 
 iframe : String -> Html Msg
 iframe url =
@@ -616,10 +623,16 @@ pageLink currentPage (page, label) =
                   [ text label ]
         ]
 
-pageLinks : Page -> Html Msg
-pageLinks currentPage =
+pageLinks : Page -> Model -> Html Msg
+pageLinks currentPage model =
     span []
-        <| List.map (pageLink currentPage) pages
+        <| List.concat
+            [ [ endTurnButton model ]
+            , List.map (pageLink currentPage) pages
+            , [ text " "
+              , undoButton model
+              ]
+            ]
 
 view : Model -> Html Msg
 view model =
@@ -629,7 +642,7 @@ view model =
             --deprecated, so sue me
             ]
         [ h2 [] [ text "Archmage" ]
-        , p [] [ pageLinks model.page ]
+        , p [] [ pageLinks mod.page mod ]
         , p []
             [ case mod.message of
                   Nothing ->
@@ -646,7 +659,7 @@ view model =
                   renderRulesPage mod
               HelpPage ->
                   renderHelpPage mod
-        , p [] [ pageLinks model.page ]
+        , p [] [ pageLinks model.page mod ]
         , footer
         ]
 
@@ -675,9 +688,12 @@ renderGamePage model =
                 _ ->
                     ([], sels, [])
         modNodeMsg = nodeMsg model
-        tl = gs.topList
-        b = gs.board
-        bl = gs.bottomList
+        bsb = (\b ->
+                   b --stringToBoard <| boardToString b
+              )
+        tl = bsb gs.topList
+        b  = bsb gs.board
+        bl = bsb gs.bottomList
     in
         div []
             [ Board.render

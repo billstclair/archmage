@@ -12,6 +12,7 @@
 module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, render
                                , whiteSetupBoard, blackSetupBoard
                                , initialCaptureBoard
+                               , centerHolePiece, centerHoleNode
                                , getNode, setNode
                                , stringToBoard, boardToString
                                , horizontalNeighbors, diagonalNeighbors
@@ -78,6 +79,18 @@ initialNodes : List Node
 initialNodes =
     List.map (\(i, l, j) -> node i l j) boardList
 
+centerHolePiece : ColoredPiece
+centerHolePiece =
+    (Black, CenterHolePiece)
+
+centerHoleNode : Node
+centerHoleNode =
+    { name = "D3"
+    , row = 3
+    , column = 3
+    , piece = Just centerHolePiece
+    }
+
 initialBoard : Board
 initialBoard =
     let n = Dict.fromList <| List.map (\n -> (n.name, n)) initialNodes
@@ -86,7 +99,7 @@ initialBoard =
                         n
                     Just node ->
                         Dict.insert "D3"
-                            { node | piece = Just (Black, CenterHolePiece) }
+                            { node | piece = Just centerHolePiece }
                             n
     in
         { rows = 7
@@ -793,7 +806,7 @@ printMove move =
     let (sn, sp) = printNode move.subject
         (tn, tp) = printNode move.target
         (color, piece) = case sp of
-                             Nothing -> (Black, CenterHolePiece)
+                             Nothing -> centerHolePiece
                              Just p -> p
     in
         (sn, color, piece, tn)
@@ -844,18 +857,10 @@ pieceMoveData piece =
         _ ->
             (PushOrPull, (\s -> []))
 
-centerNode : Node
-centerNode =
-    { name = "D3"
-    , row = 3
-    , column = 3
-    , piece = Just (Black, CenterHolePiece)
-    }
-
 namesToNodes : Dict String Node -> List String -> List Node
 namesToNodes nodeDict names =
     List.map (\name ->
-                  Maybe.withDefault centerNode
+                  Maybe.withDefault centerHoleNode
                       <| Dict.get name nodeDict
              )
         names        
@@ -974,14 +979,13 @@ findPullMove actor nodes =
                             Just (_, CenterHolePiece) ->
                                 Nothing
                             Just _ ->
-                                log "  move"
                                 Just { actor = actor
                                      , subject = subject
                                      , target = target
                                      }
                    )
     in
-        loop (log "findPullMove" nodes) Nothing
+        loop nodes Nothing
 
 ---
 --- An initial board position for play in elm repl
