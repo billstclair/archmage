@@ -638,13 +638,13 @@ renderGamePage model =
     in
         div []
             [ Board.render
-                tl setupLocations listCellSize topsel modNodeMsg
+                tl False setupLocations listCellSize topsel modNodeMsg
             , br
             , Board.render
-                b locations cellSize boardsel modNodeMsg
+                b True locations cellSize boardsel modNodeMsg
             , br
             , Board.render
-                bl setupLocations listCellSize botsel modNodeMsg
+                bl False setupLocations listCellSize botsel modNodeMsg
             , newGameButton
             ]
 

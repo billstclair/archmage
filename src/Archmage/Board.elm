@@ -40,11 +40,12 @@ import Archmage.Pieces exposing ( drawPiece, pieceTitle )
 import Dict exposing ( Dict )
 import Char
 import Html exposing ( Html )
-import Svg exposing ( Svg, svg, line, g, rect, title, text )
+import Svg exposing ( Svg, svg, line, g, rect, title, text, text_ )
 import Svg.Attributes exposing ( x, y, width, height
                                , cx, cy, r
                                , x1, y1, x2, y2
-                               , fill, stroke, strokeWidth, fontSize, transform
+                               , fill, stroke, strokeWidth, fontSize, fontWeight
+                               , transform, alignmentBaseline
                                , fillOpacity, opacity, textAnchor, dominantBaseline
                                , transform
                                )
@@ -495,23 +496,84 @@ clickRect i j cellSize msg =
              ]
         []
 
-render : Board -> PointDict -> Int -> List NodeSelection -> NodeMsg -> Html Msg
-render board locations cellSize selections nodeMsg =
+renderBoardLabels : Int -> Int -> Int -> Int -> Svg Msg
+renderBoardLabels labsize cellSize rows cols =
+    let half = labsize // 2
+        quar = labsize // 4
+        shalf = toString half
+        squar = toString quar
+        chalf = cellSize // 2
+        size = (3 * labsize // 4)
+        ssize = toString size
+    in
+        g [ fontSize ssize
+          , fontWeight "bold"
+          , fill "black"
+          , fillOpacity "1"
+          ]
+        [ g [ textAnchor "middle"
+            , alignmentBaseline "baseline"
+            , transform
+                  <| "translate(" ++ toString (labsize + chalf)
+                      ++ ", " ++ toString (7*labsize//8) ++ ")"
+            ]
+              ( List.map (\col ->
+                              text_ [ x <| toString (col * cellSize)
+                                    , y "0"
+                                    ]
+                              [ text <| toString (col+1) ]
+                         )
+                    <| List.range 0 cols
+              )
+        , g [ textAnchor "end"
+            , alignmentBaseline "middle"
+            , transform
+                  <| "translate(" ++ toString (labsize*7//8)
+                      ++ ", " ++ toString (labsize+chalf) ++ ")"
+            ]
+              ( List.map2 (\row lab ->
+                              text_ [ x "0"
+                                    , y <| toString (row * cellSize)
+                                    ]
+                              [ text lab ]
+                         )
+                    (List.range 0 rows)
+                    <| List.take rows rowLetters
+              )
+        ]
+
+render : Board -> Bool -> PointDict -> Int -> List NodeSelection -> NodeMsg -> Html Msg
+render board doLabels locations cellSize selections nodeMsg =
     let (mx, my) = maxLocation locations
         (sx, sy) = (mx+cellSize, my+cellSize)
+        boardWidth = 2 + (board.cols * cellSize)
+        boardHeight = 2 + (board.rows * cellSize)
+        labsize = if doLabels then (cellSize // 4) else 0
+        slabsize = toString labsize
+        totalWidth = boardWidth + labsize + labsize
+        totalHeight = boardHeight + labsize
     in
-        svg [ width <| toString (2 + (board.cols * cellSize))
-            , height <| toString (2 + (board.rows * cellSize))
-            , stroke "black"
-            , strokeWidth "2"
-            , fillOpacity "0"
+        svg [ width <| toString totalWidth
+            , height <| toString totalHeight
             ]
-            [ g [ transform "translate(1, 1)" ]
-                  <| List.concat
-                      [ gridLines board.rows board.cols cellSize
-                      , renderNodes board locations cellSize selections nodeMsg
-                      ]
-            ]
+        [ if doLabels then
+              renderBoardLabels labsize cellSize board.rows board.cols
+          else
+              g [][]
+        , g [ transform <| "translate(" ++ slabsize ++ ", " ++ slabsize ++ ")" ]
+              [ svg [ width <| toString boardWidth
+                    , height <| toString boardHeight
+                    , stroke "black"
+                    , strokeWidth "2"
+                    ]
+                    [ g [ transform "translate(1, 1)" ]
+                          <| List.concat
+                          [ gridLines board.rows board.cols cellSize
+                          , renderNodes board locations cellSize selections nodeMsg
+                          ]
+                    ]
+              ]
+        ]
 
 ---
 --- Move support
