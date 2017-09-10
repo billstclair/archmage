@@ -607,7 +607,7 @@ diagonalNeighbors name =
                                             [[ rowAbove ++ (toString <| col+1)
                                               , twoAbove ++
                                                    (if col == 5 then
-                                                        "0"
+                                                        "7"
                                                     else (toString <| col+2)
                                                    )
                                              ]
@@ -633,7 +633,7 @@ diagonalNeighbors name =
                                             [[ rowBelow ++ (toString <| col+1)
                                              , twoBelow ++
                                                  (if col == 5 then
-                                                      "0"
+                                                      "7"
                                                   else
                                                       (toString <| col+2)
                                                  )
