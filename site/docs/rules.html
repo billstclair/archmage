@@ -54,6 +54,8 @@
 
 <p>When the actor piece moves the subject piece according to the rules above, the actor's color changes. The current player may only use as actors pieces that are his color. Hence, any piece of his color may only act once. It then becomes a piece of the other player's color. The subject may be either color. When a target piece is pushed off the board or pushed or pulled into the center hole, it becomes a capture for the player of the opposite color of the target piece.</p>
 
+<p>In order to make infinite loops impossible, it is not legal to end your turn when the board is in a position that it has been in before at the end of a turn. This is called "Ko" in the game of Go. Archmage uses that term. If you're in a Ko position and no more moves are possible, you must undo in order to get to a non-Ko position to end your turn. If this is not possible, then the game is over.</p>
+
 </body>
 </html>
 
