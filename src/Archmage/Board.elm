@@ -18,6 +18,7 @@ module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, ren
                                , horizontalNeighbors, diagonalNeighbors
                                , allHorizontalNeighbors, allDiagonalNeighbors
                                , validMoves, validMovesForNode, makeMove
+                               , isKo, boardIsKo
                                , pieceMoveData, namesToNodes
                                , printNode, printMove, printMoves
                                , dummyBoard
@@ -851,6 +852,14 @@ validMoves color board =
                           )
         |> Dict.fromList
 
+boardIsKo : Board -> List String -> Bool
+boardIsKo board history =
+    List.member (boardToString board) history
+
+isKo : GameState -> Bool
+isKo gs =
+    not gs.isFirstMove && boardIsKo gs.board gs.history
+
 nodePiece : Maybe Node -> Maybe ColoredPiece
 nodePiece node =
     case node of
@@ -894,7 +903,12 @@ makeMove targetName gs =
                 gs3 = if not isCapture then
                           { gs | board = setBoardPiece targetName subject b3 }
                       else
-                          let gs2 = { gs | board = b3 }
+                          let gs2 = { gs
+                                        | board = b3
+                                        --There is one less piece now.
+                                        --We can no longer match the old history.
+                                        , history = []
+                                    }
                           in
                               case subject of
                                   Nothing ->
@@ -907,7 +921,7 @@ makeMove targetName gs =
                     , isFirstMove = False
                     , subject = Nothing
                     , turnMoves = TheGameState { gs | mode = ChooseActorMode }
-                                  :: gs3.turnMoves
+                                  :: gs.turnMoves
                 }
 
 doMoveCapture : ColoredPiece -> GameState -> GameState

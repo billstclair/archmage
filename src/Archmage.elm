@@ -87,7 +87,9 @@ setMessage model =
                     msg2 = if gs.mode == ChooseActorMode
                              && Dict.isEmpty model.moves
                            then
-                               if gs.turnMoves == [] then
+                               if Board.isKo gs then
+                                   "you're in Ko and no moves are possible. Undo."
+                               else if gs.turnMoves == [] then
                                    "no moves are possible. Click \"End Turn\"."
                                else
                                    "no moves are possible. Undo or click \"End Turn\"."
@@ -117,7 +119,7 @@ initialPlacementSelections player model =
 -- Set true to place all the pieces at startup.
 -- Used to speed debugging of the move code.
 doPlaceAll : Bool
-doPlaceAll = True
+doPlaceAll = False --True
 
 init : ( Model, Cmd Msg )
 init =
@@ -182,6 +184,8 @@ update msg model =
                                     , isFirstMove = True
                                     , mode = ChooseActorMode
                                     , turnMoves = []
+                                    , history = Board.boardToString gs.board
+                                                :: gs.history
                                 }
                       in
                           findValidMoves True { model | gs = gs2 }
@@ -340,6 +344,7 @@ setupEmptyBoardClick which node model =
                                    | gs = { gs3
                                               | topList = Board.initialCaptureBoard
                                               , bottomList = Board.initialCaptureBoard
+                                              , history = [boardToString gs3.board]
                                           }
                                }
             in
@@ -513,13 +518,20 @@ isPlayMode mode =
 
 endTurnButton : Model -> Html Msg
 endTurnButton model =
-    button [ onClick <| otherPlayerClick
-           -- Will eventually be disabled during Ko
-           , disabled
-                 <| (not <| isPlayMode model.gs.mode) ||
-                     (model.gs.isFirstMove && (not <| Dict.isEmpty model.moves))
-           ]
-        [ text "End Turn" ]
+    let gs = model.gs
+        isKo = Board.isKo gs
+    in
+        button [ onClick <| otherPlayerClick
+               -- Will eventually be disabled during Ko
+               , disabled
+                     <| (not <| isPlayMode gs.mode) || isKo ||
+                         (gs.isFirstMove && (not <| Dict.isEmpty model.moves))
+               , title <| if isKo then
+                              "The board is in a position it has been in before. You may not end your turn now."
+                          else
+                              ""
+               ]
+        [ text <| if isKo then "Ko" else "End Turn" ]
 
 undoButton : Model -> Html Msg
 undoButton model =
