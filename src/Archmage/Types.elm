@@ -17,9 +17,9 @@ module Archmage.Types exposing ( GameState, Page(..), Msg(..), Piece(..), Board,
                                , Move, MovesDict, Direction(..)
                                , getBoardPiece, setBoardPiece
                                , otherColor, playerColor, otherPlayer
-                               , pieceList, pieceToAbbreviation, abbreviationToPiece
+                               , pieceList, pieceToString, stringToPiece
                                , rowLetters, zeroPoint
-                               , get, set, butLast, adjoin
+                               , get, set, rget, butLast, adjoin
                                )
 
 import Dict exposing ( Dict )
@@ -93,8 +93,8 @@ pieceList : List Piece
 pieceList =
     [ HandPiece, CupPiece, SwordPiece, WandPiece, TowerPiece, MoonPiece, MagePiece ]
 
-pieceToAbbreviation : Piece -> String
-pieceToAbbreviation piece =
+pieceToString : Piece -> String
+pieceToString piece =
     case piece of
         HandPiece ->
             "H"
@@ -115,8 +115,8 @@ pieceToAbbreviation piece =
         NoPiece ->
             ""
 
-abbreviationDict : Dict String Piece
-abbreviationDict =
+pieceStringDict : Dict String Piece
+pieceStringDict =
     Dict.fromList [ ("H", HandPiece)
                   , ("C", CupPiece)
                   , ("S", SwordPiece)
@@ -127,9 +127,9 @@ abbreviationDict =
                   , ("O", CenterHolePiece)
                   ]
 
-abbreviationToPiece : String -> Piece
-abbreviationToPiece abbreviation =
-    case Dict.get abbreviation abbreviationDict of
+stringToPiece : String -> Piece
+stringToPiece string =
+    case Dict.get string pieceStringDict of
         Nothing ->
             NoPiece
         Just piece ->
@@ -275,6 +275,17 @@ get key plist =
 set : k -> v -> XPlist k v -> XPlist k v
 set key value plist =
     (key, value) :: (List.filter (\(k,_) -> k /= key) plist)
+
+rget : v -> XPlist k v -> Maybe k
+rget value plist =
+    case plist of
+        [] ->
+            Nothing
+        (k, v) :: rest ->
+            if value == v then
+                Just k
+            else
+                rget value rest
 
 butLast : List a -> List a
 butLast list =

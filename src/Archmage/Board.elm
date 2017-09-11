@@ -31,7 +31,7 @@ import Archmage.Types as Types
              , Color(..), Piece(..), ColoredPiece, NodeMsg, Move, MovesDict
              , Direction(..)
              , getBoardPiece, setBoardPiece, otherColor
-             , pieceList, pieceToAbbreviation, abbreviationToPiece
+             , pieceList, pieceToString, stringToPiece
              , zeroPoint, rowLetters
              , get, set
              )
@@ -111,7 +111,7 @@ initialBoard =
 
 setupList : List (Int, String, Piece)
 setupList =
-    List.map2 (\j p -> (j, pieceToAbbreviation p, p)) indices pieceList
+    List.map2 (\j p -> (j, pieceToString p, p)) indices pieceList
 
 makeSetupBoard : Color -> Board
 makeSetupBoard color =
@@ -236,7 +236,7 @@ firstChar : String -> Char
 firstChar string =
     String.toList string
         |> List.head
-        |> Maybe.withDefault ' '
+        |> Maybe.withDefault 'x'
 
 pieceToChar : Maybe ColoredPiece -> Char
 pieceToChar piece =
@@ -244,7 +244,7 @@ pieceToChar piece =
         Nothing ->
             '-'
         Just (color, piece) ->
-            let letter = firstChar <| pieceToAbbreviation piece
+            let letter = firstChar <| pieceToString piece
             in
                 case color of
                     White ->
@@ -255,11 +255,12 @@ pieceToChar piece =
 charToPiece : Char -> Maybe ColoredPiece
 charToPiece char =
     let str = String.fromChar char
+        ustr = String.toUpper str
     in
         if str == "-" then
             Nothing
         else
-            let piece = abbreviationToPiece str
+            let piece = stringToPiece ustr
                 color = if str == String.toUpper str then
                             Black
                         else
