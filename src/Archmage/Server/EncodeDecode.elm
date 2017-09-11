@@ -62,17 +62,17 @@ gameStateDecoder =
     JD.andThen
         (\list ->
              case list of
-                 [p, m, f, a, s, bs, h, tm] ->
+                 [ player, mode, isFirstMove, actor, subject, boards, history, turnMoves] ->
                      JD.map8
                          makeGameState
-                         (andThenSucceed playerDecoder p)
-                         (andThenSucceed modeDecoder m)
-                         (andThenSucceed JD.bool f)
-                         (andThenSucceed (JD.nullable nodeDecoder) a)
-                         (andThenSucceed (JD.nullable nodeDecoder) s)
-                         (andThenSucceed boardsDecoder bs)
-                         (andThenSucceed (JD.list JD.string) h)
-                         (andThenSucceed (JD.list theGameStateDecoder) tm)
+                         (andThenSucceed playerDecoder player)
+                         (andThenSucceed modeDecoder mode)
+                         (andThenSucceed JD.bool isFirstMove)
+                         (andThenSucceed (JD.nullable nodeDecoder) actor)
+                         (andThenSucceed (JD.nullable nodeDecoder) subject)
+                         (andThenSucceed boardsDecoder boards)
+                         (andThenSucceed (JD.list JD.string) history)
+                         (andThenSucceed (JD.list theGameStateDecoder) turnMoves)
                  _ ->
                      JD.fail "Other than 8 elements in GameState list."
         )
