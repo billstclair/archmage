@@ -139,13 +139,9 @@ blackSetupBoard =
 
 captureList : List (String, Int)
 captureList =
-    List.map (\(j, a, p) ->
-                 [ (a ++ "1", 2 * j)
-                 , (a ++ "2", (2 * j) + 1)
-                 ]
-             )
-             setupList
-        |> List.concat
+    List.map2 (\name n -> (name, n))
+        ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N"]
+        (List.range 0 13)
 
 initialCaptureBoard : Board
 initialCaptureBoard =
@@ -227,7 +223,7 @@ renderInfo cellSize =
 
 getNode : String -> Board -> Maybe Node
 getNode name board =
-    Dict.get (String.toUpper name) board.nodes
+    Dict.get name board.nodes
 
 setNode : String -> Node -> Board -> Board
 setNode name node board =
@@ -587,7 +583,7 @@ nodeNameComponents name =
             Err _ ->
                 ("", 0)
             Ok col ->
-                (String.toUpper row, col)
+                (row, col)
 
 -- Turn a board node name into a list of horizontal neighbor names and the node
 -- that one would push to.
@@ -920,16 +916,13 @@ doMoveCapture coloredPiece gs =
         board = case color of
                     Black -> gs.topList
                     White -> gs.bottomList
-        letter = pieceToAbbreviation piece
-        maybeName = letter ++ "1"
-        name = case getNode maybeName board of
+        name = case LE.find (\(_, node) -> node.piece == Nothing)
+                       <| Dict.toList board.nodes
+               of
                    Nothing ->
-                       maybeName --can't happen
-                   Just node ->
-                       if node.piece == Nothing then
-                           maybeName
-                       else
-                           letter ++ "2"
+                       ""       --can't happen
+                   Just (_, node) ->
+                       node.name
         newBoard = setBoardPiece name (Just coloredPiece) board
     in
         case color of
@@ -1140,20 +1133,20 @@ findPullMove actor nodes =
 
 dummyPlacements : List (String, ColoredPiece)
 dummyPlacements =
-    [ ("a1", (White, HandPiece))
-    , ("a2", (Black, HandPiece))
-    , ("a4", (White, CupPiece))
-    , ("a6", (Black, CupPiece))
-    , ("c1", (White, SwordPiece))
-    , ("c2", (Black, SwordPiece))
-    , ("b4", (White, WandPiece))
-    , ("b6", (Black, WandPiece))
-    , ("d1", (White, TowerPiece))
-    , ("d2", (Black, TowerPiece))
-    , ("d6", (White, MoonPiece))
-    , ("e2", (Black, MoonPiece))
-    , ("f1", (White, MagePiece))
-    , ("f2", (Black, MagePiece))
+    [ ("A1", (White, HandPiece))
+    , ("A2", (Black, HandPiece))
+    , ("A4", (White, CupPiece))
+    , ("A6", (Black, CupPiece))
+    , ("C1", (White, SwordPiece))
+    , ("C2", (Black, SwordPiece))
+    , ("B4", (White, WandPiece))
+    , ("B6", (Black, WandPiece))
+    , ("D1", (White, TowerPiece))
+    , ("D2", (Black, TowerPiece))
+    , ("D6", (White, MoonPiece))
+    , ("E2", (Black, MoonPiece))
+    , ("F1", (White, MagePiece))
+    , ("F2", (Black, MagePiece))
     ]
 
 dummyBoard : Board

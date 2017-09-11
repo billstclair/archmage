@@ -117,7 +117,7 @@ initialPlacementSelections player model =
 -- Set true to place all the pieces at startup.
 -- Used to speed debugging of the move code.
 doPlaceAll : Bool
-doPlaceAll = False --True
+doPlaceAll = True
 
 init : ( Model, Cmd Msg )
 init =
@@ -505,11 +505,19 @@ otherPlayerClick : Msg
 otherPlayerClick =
     NodeClick OtherPlayerClick MainBoard centerHoleNode
 
+isPlayMode : Mode -> Bool
+isPlayMode mode =
+    mode == ChooseActorMode ||
+    mode == ChooseSubjectMode ||
+    mode == ChooseTargetMode
+
 endTurnButton : Model -> Html Msg
 endTurnButton model =
     button [ onClick <| otherPlayerClick
            -- Will eventually be disabled during Ko
-           , disabled <| model.gs.isFirstMove && (not <| Dict.isEmpty model.moves)
+           , disabled
+                 <| (not <| isPlayMode model.gs.mode) ||
+                     (model.gs.isFirstMove && (not <| Dict.isEmpty model.moves))
            ]
         [ text "End Turn" ]
 

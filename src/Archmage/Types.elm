@@ -129,7 +129,7 @@ abbreviationDict =
 
 abbreviationToPiece : String -> Piece
 abbreviationToPiece abbreviation =
-    case Dict.get (String.toUpper abbreviation) abbreviationDict of
+    case Dict.get abbreviation abbreviationDict of
         Nothing ->
             NoPiece
         Just piece ->
@@ -165,7 +165,7 @@ type alias GameState =
 
 getBoardPiece : String -> Board -> Maybe ColoredPiece
 getBoardPiece name board =
-    case Dict.get (String.toUpper name) board.nodes of
+    case Dict.get name board.nodes of
         Nothing ->
             Nothing
         Just node ->
@@ -173,16 +173,14 @@ getBoardPiece name board =
 
 setBoardPiece : String -> Maybe ColoredPiece -> Board -> Board
 setBoardPiece name piece board =
-    let uname = String.toUpper name
-    in
-        case Dict.get uname board.nodes of
-            Nothing ->
-                board
-            Just node ->
-                { board
-                    | nodes = Dict.insert
-                              uname { node | piece = piece } board.nodes
-                }
+    case Dict.get name board.nodes of
+        Nothing ->
+            board
+        Just node ->
+            { board
+                | nodes = Dict.insert
+                  name { node | piece = piece } board.nodes
+            }
 
 rowLetters : List String
 rowLetters =
