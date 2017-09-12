@@ -60,6 +60,7 @@ type Msg
     | SetGameid String
     | SetServerUrl String
     | NewGame
+    | SetRestoreState String
     | RestoreGame
     | JoinGame
     | JoinPublicGame String

@@ -26,10 +26,15 @@ import Archmage.Board as Board exposing ( initialGameState, getNode, printMove
                                         , boardToString, stringToBoard
                                         , centerHoleName, centerHoleNode
                                         )
+import Archmage.Server.EncodeDecode exposing ( encodeGameState, decodeGameState )
 
-import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span )
-import Html.Attributes exposing ( align, src, href, target, style, disabled, title )
-import Html.Events exposing ( onClick )
+import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span
+                     , input
+                     )
+import Html.Attributes exposing ( align, src, href, target, style, disabled, title
+                                , type_, size, value
+                                )
+import Html.Events exposing ( onClick, onInput )
 import Svg exposing ( Svg, svg, g, rect )
 import Svg.Attributes exposing ( x, y, width, height, stroke, strokeWidth, fillOpacity )
 import Char
@@ -44,6 +49,7 @@ type alias Model =
     , nodeSelections : List NodeSelection
     , renderInfo : RenderInfo
     , message : Maybe String
+    , restoreState : String
     , gs : GameState
     }
 
@@ -119,7 +125,7 @@ initialPlacementSelections player model =
 -- Set true to place all the pieces at startup.
 -- Used to speed debugging of the move code.
 doPlaceAll : Bool
-doPlaceAll = True
+doPlaceAll = False --True
 
 init : ( Model, Cmd Msg )
 init =
@@ -128,6 +134,7 @@ init =
               , nodeSelections = []
               , renderInfo = Board.renderInfo pieceSize
               , message = Nothing
+              , restoreState = ""
               , gs = initialGameState doPlaceAll
               }
         model = if not doPlaceAll then
@@ -151,6 +158,28 @@ update msg model =
     case log "" msg of
         NewGame ->
             init
+        SetRestoreState text ->
+            ( { model | restoreState = text }
+            , Cmd.none
+            )
+        RestoreGame ->
+            case decodeGameState model.restoreState of
+                Ok gs ->
+                    let gs2 = { gs | mode = if isPlayMode gs.mode then
+                                                ChooseActorMode
+                                            else
+                                                gs.mode
+                                    , actor = Nothing
+                                    , subject = Nothing
+                              }
+                    in
+                        ( findValidMoves True { model | gs = gs2 }
+                        , Cmd.none
+                        )
+                Err _ ->
+                    ( { model | restoreState = "Invalid game state." }
+                    , Cmd.none
+                    )
         SetPage page ->
             ( { model | page = page }
             , Cmd.none
@@ -598,6 +627,8 @@ pageLinks currentPage model =
 view : Model -> Html Msg
 view model =
     let mod = setMessage model
+        gs = model.gs
+        emptyBoard = Board.isEmptyBoard gs.board
     in
         div [ align "center"
             --deprecated, so sue me
@@ -620,6 +651,30 @@ view model =
                   renderRulesPage mod
               HelpPage ->
                   renderHelpPage mod
+        , p []
+            [ input [ type_ "text"
+                    , onInput <| if not emptyBoard then
+                                     (\_ -> Noop)
+                                 else
+                                     SetRestoreState
+                    , size 60
+                    , if emptyBoard then
+                          title "Enter a saved game to restore it."
+                      else
+                          let gs2 = { gs
+                                        | actor = Nothing
+                                        , subject = Nothing
+                                    }
+                          in
+                              value <| encodeGameState gs2
+                    ]
+                  []
+            , text " "
+            , button [ onClick RestoreGame
+                     , disabled <| not emptyBoard
+                     ]
+                  [ text "Restore" ]
+            ]
         , p [] [ pageLinks model.page mod ]
         , footer
         ]

@@ -10,6 +10,7 @@
 ----------------------------------------------------------------------
 
 module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, render
+                               , isEmptyBoard
                                , whiteSetupBoard, blackSetupBoard
                                , initialCaptureBoard
                                , centerHoleName, centerHolePiece, centerHoleNode
@@ -132,6 +133,21 @@ initialBoard =
         , cols = 7
         , nodes = nodes
         }
+
+isEmptyBoard : Board -> Bool
+isEmptyBoard board =
+    Dict.foldl (\k v res ->
+                    if not res then
+                        False
+                    else
+                        case v.piece of
+                            Nothing ->
+                                True
+                            Just (_, p) ->
+                                p == CenterHolePiece
+               )
+               True
+               board.nodes
 
 setupList : List (Int, String, Piece)
 setupList =
@@ -329,16 +345,6 @@ captureRowColToNodeName row col =
         Just (res, _) ->
             res
 
-mainBoardRowColToNodeName : Int -> Int -> String
-mainBoardRowColToNodeName row col =
-    let rowName = case LE.getAt row rowLetters of
-                      Nothing ->
-                          toString row --can't happen
-                      Just name ->
-                          name
-    in
-        nodeName rowName col
-
 stringToBoard : String -> Board
 stringToBoard string =
     let len = String.length string
@@ -355,7 +361,7 @@ stringToBoard string =
                        else if len == 14 then
                            captureRowColToNodeName
                        else
-                           mainBoardRowColToNodeName
+                           inodeName
         loop : List Char -> Int -> Int -> List (String, Node) -> Board
         loop = (\chars row col res ->
                     case chars of
