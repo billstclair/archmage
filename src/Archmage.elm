@@ -18,7 +18,7 @@ import Archmage.Types as Types
              , Page(..), Msg(..), Mode(..), ClickKind(..), WhichBoard(..)
              , NodeMsg, MovesDict
              , otherColor, playerColor, otherPlayer
-             , setBoardPiece, pieceToAbbreviation
+             , setBoardPiece
              )
 import Archmage.Pieces exposing ( drawPiece )
 import Archmage.Board as Board exposing ( initialGameState, getNode, printMove

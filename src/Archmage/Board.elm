@@ -18,7 +18,7 @@ module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, ren
                                , horizontalNeighbors, diagonalNeighbors
                                , allHorizontalNeighbors, allDiagonalNeighbors
                                , validMoves, validMovesForNode, makeMove
-                               , isKo, boardIsKo
+                               , isKo, boardIsKo, hasNonKoMoves
                                , pieceMoveData, namesToNodes
                                , printNode, printMove, printMoves
                                , dummyBoard
@@ -30,7 +30,7 @@ import Archmage.Types as Types
              , Point, PointDict, RenderInfo, Mode(..)
              , Color(..), Piece(..), ColoredPiece, NodeMsg, Move, MovesDict
              , Direction(..)
-             , getBoardPiece, setBoardPiece, otherColor
+             , getBoardPiece, setBoardPiece, otherColor, otherPlayer, playerColor
              , pieceList, pieceToString, stringToPiece
              , zeroPoint, rowLetters
              , get, set
@@ -842,6 +842,10 @@ allNearNeighbors name =
 
 validMoves : Color -> Board -> MovesDict
 validMoves color board =
+    Dict.fromList <| validMovesAlist color board
+
+validMovesAlist : Color -> Board -> List (String, List Move)
+validMovesAlist color board =
     Dict.values board.nodes
         |> List.concatMap (\node ->
                                let moves = validMovesForNode color board node
@@ -851,7 +855,6 @@ validMoves color board =
                                    else
                                        [(node.name, moves)]
                           )
-        |> Dict.fromList
 
 boardIsKo : Board -> List String -> Bool
 boardIsKo board history =
@@ -1141,6 +1144,60 @@ findPullMove actor nodes =
                    )
     in
         loop nodes Nothing
+
+---
+--- Ko
+---
+
+hasNonKoMoves : Bool -> GameState -> Bool
+hasNonKoMoves useOtherPlayer gs =
+    let player = if useOtherPlayer then
+                     otherPlayer gs.player
+                 else
+                     gs.player
+        color = playerColor player
+        findMoves : Board -> List Move
+        findMoves board =
+            List.concatMap Tuple.second <| validMovesAlist color board
+        inner : GameState -> List Move -> List String -> (Bool, List String)
+        inner = (\gs moves visited ->
+                     case moves of
+                         [] ->
+                             (False, visited)
+                         move :: tail ->
+                             let gs2 = { gs
+                                           | actor = Just move.actor
+                                           , subject = Just move.subject
+                                       }
+                                 gs3 = makeMove move.target.name gs2
+                             in
+                                 if not <| isKo gs3 then
+                                     (True, visited)
+                                 else
+                                     let board3 = gs3.board
+                                         (res, visited3) = loop gs3 visited
+                                     in
+                                         if res then
+                                             (res, visited3)
+                                         else
+                                             inner gs3 tail visited3
+                )
+        loop : GameState -> List String -> (Bool, List String)
+        loop = (\gs visited ->
+                    let board = gs.board
+                        boardString = boardToString board
+                    in
+                        if List.member boardString visited then
+                            (False, visited)
+                        else
+                            let moves = findMoves board
+                                visited2 = boardString :: visited
+                            in
+                                inner gs moves visited2
+               )
+        (res, _) = loop { gs | isFirstMove = False } []
+    in
+        res      
 
 ---
 --- An initial board position for play in elm repl
