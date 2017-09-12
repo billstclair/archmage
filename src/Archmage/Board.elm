@@ -55,9 +55,29 @@ import String
 import List.Extra as LE
 import Debug exposing ( log )
 
+nodeName : String -> Int -> String
+nodeName row col =
+    row ++ (col2s col)
+
+inodeName : Int -> Int -> String
+inodeName row col =
+    nodeName (Maybe.withDefault " " <| LE.getAt row rowLetters) col
+
+col2s : Int -> String
+col2s col =
+    toString (col+1)
+
+s2col : String -> Int
+s2col s =
+    case String.toInt s of
+        Ok c ->
+            c - 1
+        Err _ ->
+            8
+
 node : Int -> String -> Int -> Node
 node row rowLetter column =
-    { name = rowLetter ++ (toString (column+1))
+    { name = nodeName rowLetter column
     , row = row
     , column = column
     , piece = Nothing
@@ -313,11 +333,11 @@ mainBoardRowColToNodeName : Int -> Int -> String
 mainBoardRowColToNodeName row col =
     let rowName = case LE.getAt row rowLetters of
                       Nothing ->
-                          toString (row+1) --can't happen
+                          toString row --can't happen
                       Just name ->
                           name
     in
-        rowName ++ (toString (col+1))        
+        nodeName rowName col
 
 stringToBoard : String -> Board
 stringToBoard string =
@@ -589,51 +609,46 @@ nodeNameComponents name =
             Err _ ->
                 ("", 0)
             Ok col ->
-                (row, col)
+                (row, col-1)
 
 -- Turn a board node name into a list of horizontal neighbor names and the node
 -- that one would push to.
 horizontalNeighbors : String -> List (List String)
 horizontalNeighbors name =
     let (row, col) = nodeNameComponents name
-        scol = toString col
     in
         case LE.elemIndex row rowLetters of
             Nothing ->
                 []
             Just idx ->
-                let rowAbove = Maybe.withDefault ""
-                               <| LE.getAt (idx-1) rowLetters
-                    rowBelow = Maybe.withDefault ""
-                                        <| LE.getAt (idx+1) rowLetters
+                let irowAbove = idx - 1
+                    irowBelow = idx + 1
                 in
                     List.concat
-                        [ if rowAbove == "" then
+                        [ if irowAbove < 0 then
                               []
                           else
-                              let twoAbove = Maybe.withDefault " "
-                                             <| LE.getAt (idx-2) rowLetters
+                              let itwoAbove = idx - 2
                               in
-                                  [[rowAbove ++ scol, twoAbove ++ scol]]
+                                  [[inodeName irowAbove col, inodeName itwoAbove col]]
                         , if col <= 0 then
                               []
                           else
-                              [[ row ++ (toString <| col-1)
-                               , row ++ (toString <| col-2)
+                              [[ nodeName row (col-1)
+                               , nodeName row (col-2)
                                ]
                               ]
-                        , if rowBelow == "" then
+                        , if irowBelow > 6 then
                               []
                           else
-                              let twoBelow = Maybe.withDefault " "
-                                             <| LE.getAt (idx+2) rowLetters
+                              let itwoBelow = idx + 2
                               in
-                                  [[rowBelow ++ scol, twoBelow ++ scol]]
+                                  [[inodeName irowBelow col, inodeName itwoBelow col]]
                         , if col > 5 then
                               []
                           else
-                              [[ row ++ (toString <| col+1)
-                               , row ++ (toString <| col+2)
+                              [[ nodeName row (col+1)
+                               , nodeName row (col+2)
                                ]
                               ]
                         ]
@@ -641,68 +656,54 @@ horizontalNeighbors name =
 diagonalNeighbors : String -> List (List String)
 diagonalNeighbors name =
     let (row, col) = nodeNameComponents name
-        scol = toString col
     in
         case LE.elemIndex row rowLetters of
             Nothing ->
                 []
             Just idx ->
-                let rowAbove = Maybe.withDefault ""
-                               <| LE.getAt (idx-1) rowLetters
-                    rowBelow = Maybe.withDefault ""
-                                        <| LE.getAt (idx+1) rowLetters
+                let irowAbove = idx - 1
+                    irowBelow = idx + 1
                 in
                     List.concat
-                        [ if rowAbove == "" then
+                        [ if irowAbove < 0 then
                               []
                           else
-                              let twoAbove = Maybe.withDefault " "
-                                             <| LE.getAt (idx-2) rowLetters
+                              let itwoAbove = idx - 2
                               in
                                   List.concat
                                       [ if col <= 0 then
                                             []
                                         else
-                                            [[ rowAbove ++ (toString <| col-1)
-                                              , twoAbove ++ (toString <| col-2)
+                                            [[ inodeName irowAbove (col-1)
+                                             , inodeName itwoAbove (col-2)
                                              ]
                                             ]
                                       , if col > 5 then
                                             []
                                         else
-                                            [[ rowAbove ++ (toString <| col+1)
-                                              , twoAbove ++
-                                                   (if col == 5 then
-                                                        "7"
-                                                    else (toString <| col+2)
-                                                   )
+                                            [[ inodeName irowAbove (col+1)
+                                             , inodeName itwoAbove (col+2)
                                              ]
                                             ]
                                       ]
-                        , if rowBelow == "" then
+                        , if irowBelow > 7 then
                               []
                           else
-                              let twoBelow = Maybe.withDefault " "
-                                             <| LE.getAt (idx+2) rowLetters
+                              let itwoBelow = idx + 2
                               in
                                   List.concat
                                       [ if col <= 0 then
                                             []
                                         else
-                                            [[ rowBelow ++ (toString <| col-1)
-                                             , twoBelow ++ (toString <| col-2)
+                                            [[ inodeName irowBelow (col-1)
+                                             , inodeName itwoBelow (col-2)
                                              ]
                                             ]
                                       , if col > 5 then
                                             []
                                         else
-                                            [[ rowBelow ++ (toString <| col+1)
-                                             , twoBelow ++
-                                                 (if col == 5 then
-                                                      "7"
-                                                  else
-                                                      (toString <| col+2)
-                                                 )
+                                            [[ inodeName irowBelow (col+1)
+                                             , inodeName itwoBelow (col+2)
                                              ]
                                             ]
                                       ]
@@ -711,34 +712,31 @@ diagonalNeighbors name =
 allHorizontalNeighbors : String -> List (List String)
 allHorizontalNeighbors name =
     let (row, col) = nodeNameComponents name
-        scol = toString col
         ensureCdr = (\l ->
                          if (List.drop 1 l) == [] then
                              []
                          else
                              [l]
                     )
-        aboveLoop : Int -> String -> List String -> List String
-        aboveLoop = (\i sc res ->
+        aboveLoop : Int -> Int -> List String -> List String
+        aboveLoop = (\i c res ->
                          if i < 0 then
                              List.reverse res
                          else
-                             let rowAbove = Maybe.withDefault " "
-                                            <| LE.getAt (i-1) rowLetters
+                             let irowAbove = i - 1
                              in
-                                 aboveLoop (i-1) sc
-                                     <| (rowAbove ++ sc) :: res
+                                 aboveLoop (i-1) c
+                                     <| inodeName irowAbove c :: res
                     )
-        belowLoop : Int -> String -> List String -> List String
-        belowLoop = (\i sc res ->
+        belowLoop : Int -> Int -> List String -> List String
+        belowLoop = (\i c res ->
                          if i >= 7 then
                              List.reverse res
                          else
-                             let rowBelow = Maybe.withDefault " "
-                                            <| LE.getAt (i+1) rowLetters
+                             let irowBelow = i + 1
                              in
-                                 belowLoop (i+1) sc
-                                     <| (rowBelow ++ sc) :: res
+                                 belowLoop (i+1) c
+                                     <| inodeName irowBelow c :: res
                     )
         leftLoop  : String -> Int -> List String -> List String
         leftLoop  = (\r c res ->
@@ -746,7 +744,7 @@ allHorizontalNeighbors name =
                              List.reverse res
                          else
                              leftLoop r (c-1)
-                                 <| (r ++ (toString <| c-1)) :: res
+                                 <| nodeName r (c-1) :: res
                     )
         rightLoop : String -> Int -> List String -> List String
         rightLoop = (\r c res ->
@@ -754,8 +752,7 @@ allHorizontalNeighbors name =
                              List.reverse res
                          else
                              rightLoop r (c+1)
-                                 <| (r ++ (toString <| c+1))
-                                    :: res
+                                 <| nodeName r (c+1) :: res
                     )
     in
         case LE.elemIndex row rowLetters of
@@ -763,16 +760,15 @@ allHorizontalNeighbors name =
                 []
             Just idx ->
                 List.concat
-                    [ ensureCdr <| aboveLoop idx scol []
+                    [ ensureCdr <| aboveLoop idx col []
                     , ensureCdr <| leftLoop row col []
-                    , ensureCdr <| belowLoop idx scol []
+                    , ensureCdr <| belowLoop idx col []
                     , ensureCdr <| rightLoop row col []
                     ]
                     
 allDiagonalNeighbors : String -> List (List String)
 allDiagonalNeighbors name =
     let (row, col) = nodeNameComponents name
-        scol = toString col
         ensureCdr = (\l ->
                          if (List.drop 1 l) == [] then
                              []
@@ -784,18 +780,17 @@ allDiagonalNeighbors name =
                          if i < 0 then
                              (List.reverse left, List.reverse right)
                          else
-                             let rowAbove = Maybe.withDefault " "
-                                            <| LE.getAt (i-1) rowLetters
+                             let irowAbove = i - 1
                              in
                                  aboveLoop (i-1) (cl-1) (cr+1)
                                      ( if cl < 0 then
                                            left
                                        else
-                                           (rowAbove ++ (toString (cl-1))) :: left
+                                           inodeName irowAbove (cl-1) :: left
                                      , if cr > 6 then
                                            right
                                        else
-                                           (rowAbove ++ (toString (cr+1))) :: right
+                                           inodeName irowAbove (cr+1) :: right
                                      )
                     )
         belowLoop : Int -> Int -> Int -> (List String, List String) -> (List String, List String)
@@ -803,24 +798,17 @@ allDiagonalNeighbors name =
                          if i > 6 then
                              (List.reverse left, List.reverse right)
                          else
-                             let rowBelow = Maybe.withDefault " "
-                                            <| LE.getAt (i+1) rowLetters
+                             let irowBelow = i + 1
                              in
                                  belowLoop (i+1) (cl-1) (cr+1)
                                      ( if cl < 0 then
                                            left
                                        else
-                                           (rowBelow ++ (toString (cl-1))) :: left
+                                           inodeName irowBelow (cl-1) :: left
                                      , if cr > 6 then
                                            right
                                        else
-                                           (rowBelow ++
-                                                (if cr == 7 then
-                                                     "0"
-                                                 else
-                                                     (toString (cr+1))
-                                                )
-                                           ) :: right
+                                           inodeName irowBelow (cr+1) :: right
                                      )
                     )
     in
