@@ -1174,11 +1174,10 @@ hasNonKoMoves useOtherPlayer gs =
                                  if not <| isKo gs3 then
                                      (True, visited)
                                  else
-                                     let board3 = gs3.board
-                                         (res, visited3) = loop gs3 visited
+                                     let (nonKo, visited3) = loop gs3 visited
                                      in
-                                         if res then
-                                             (res, visited3)
+                                         if nonKo then
+                                             (nonKo, visited3)
                                          else
                                              inner gs3 tail visited3
                 )
