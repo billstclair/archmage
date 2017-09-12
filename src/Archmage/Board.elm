@@ -12,7 +12,7 @@
 module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, render
                                , whiteSetupBoard, blackSetupBoard
                                , initialCaptureBoard
-                               , centerHolePiece, centerHoleNode
+                               , centerHoleName, centerHolePiece, centerHoleNode
                                , getNode, setNode
                                , stringToBoard, boardToString
                                , horizontalNeighbors, diagonalNeighbors
@@ -57,7 +57,7 @@ import Debug exposing ( log )
 
 node : Int -> String -> Int -> Node
 node row rowLetter column =
-    { name = rowLetter ++ (toString column)
+    { name = rowLetter ++ (toString (column+1))
     , row = row
     , column = column
     , piece = Nothing
@@ -85,9 +85,13 @@ centerHolePiece : ColoredPiece
 centerHolePiece =
     (Black, CenterHolePiece)
 
+centerHoleName : String
+centerHoleName =
+    "D4"
+
 centerHoleNode : Node
 centerHoleNode =
-    { name = "D3"
+    { name = centerHoleName
     , row = 3
     , column = 3
     , piece = Just centerHolePiece
@@ -96,11 +100,11 @@ centerHoleNode =
 initialBoard : Board
 initialBoard =
     let n = Dict.fromList <| List.map (\n -> (n.name, n)) initialNodes
-        nodes = case Dict.get "D3" n of
+        nodes = case Dict.get centerHoleName n of
                     Nothing ->
                         n
                     Just node ->
-                        Dict.insert "D3"
+                        Dict.insert centerHoleName
                             { node | piece = Just centerHolePiece }
                             n
     in
@@ -309,11 +313,11 @@ mainBoardRowColToNodeName : Int -> Int -> String
 mainBoardRowColToNodeName row col =
     let rowName = case LE.getAt row rowLetters of
                       Nothing ->
-                          toString row --can't happen
+                          toString (row+1) --can't happen
                       Just name ->
                           name
     in
-        rowName ++ (toString col)        
+        rowName ++ (toString (col+1))        
 
 stringToBoard : String -> Board
 stringToBoard string =
@@ -1166,10 +1170,10 @@ hasNonKoMoves useOtherPlayer gs =
                              (False, visited)
                          move :: tail ->
                              let gs2 = { gs
-                                           | actor = Just move.actor
-                                           , subject = Just move.subject
+                                           | actor = Just <| log "actor" move.actor
+                                           , subject = Just <| log "subject" move.subject
                                        }
-                                 gs3 = makeMove move.target.name gs2
+                                 gs3 = makeMove (log "target" move.target.name) gs2
                              in
                                  if not <| isKo gs3 then
                                      (True, visited)
@@ -1204,20 +1208,20 @@ hasNonKoMoves useOtherPlayer gs =
 
 dummyPlacements : List (String, ColoredPiece)
 dummyPlacements =
-    [ ("A1", (White, HandPiece))
-    , ("A2", (Black, HandPiece))
-    , ("A4", (White, CupPiece))
-    , ("A6", (Black, CupPiece))
-    , ("C1", (White, SwordPiece))
-    , ("C2", (Black, SwordPiece))
-    , ("B4", (White, WandPiece))
-    , ("B6", (Black, WandPiece))
-    , ("D1", (White, TowerPiece))
-    , ("D2", (Black, TowerPiece))
-    , ("D6", (White, MoonPiece))
-    , ("E2", (Black, MoonPiece))
-    , ("F1", (White, MagePiece))
-    , ("F2", (Black, MagePiece))
+    [ ("A2", (White, HandPiece))
+    , ("A3", (Black, HandPiece))
+    , ("A5", (White, CupPiece))
+    , ("A7", (Black, CupPiece))
+    , ("C2", (White, SwordPiece))
+    , ("C3", (Black, SwordPiece))
+    , ("B5", (White, WandPiece))
+    , ("B7", (Black, WandPiece))
+    , ("D2", (White, TowerPiece))
+    , ("D3", (Black, TowerPiece))
+    , ("D7", (White, MoonPiece))
+    , ("E3", (Black, MoonPiece))
+    , ("F2", (White, MagePiece))
+    , ("F3", (Black, MagePiece))
     ]
 
 dummyBoard : Board

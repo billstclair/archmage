@@ -24,7 +24,7 @@ import Archmage.Pieces exposing ( drawPiece )
 import Archmage.Board as Board exposing ( initialGameState, getNode, printMove
                                         , makeMove
                                         , boardToString, stringToBoard
-                                        , centerHoleNode
+                                        , centerHoleName, centerHoleNode
                                         )
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span )
@@ -119,7 +119,7 @@ initialPlacementSelections player model =
 -- Set true to place all the pieces at startup.
 -- Used to speed debugging of the move code.
 doPlaceAll : Bool
-doPlaceAll = False --True
+doPlaceAll = True
 
 init : ( Model, Cmd Msg )
 init =
@@ -388,7 +388,7 @@ highlightActors moves model =
                              , if model.gs.isFirstMove then
                                    []
                                else
-                                   [(otherPlayerSelectionColor, "D3")]
+                                   [(otherPlayerSelectionColor, centerHoleName)]
                              ]
                  }
 
