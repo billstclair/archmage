@@ -85,7 +85,7 @@ setMessage model =
     in
         case Types.get gs.mode messages of
             Nothing ->
-                { model | message = Nothing }
+                model
             Just message ->
                 let c = case gs.player of
                             WhitePlayer -> "White, "
@@ -155,6 +155,17 @@ whichBoard which model =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let (mod, cmd) = updateInternal msg { model | message = Nothing }
+        mod2 = if mod.message == Nothing then
+                   setMessage mod
+               else
+                   mod
+    in
+        (mod2, cmd)
+        
+
+updateInternal : Msg -> Model -> ( Model, Cmd Msg )
+updateInternal msg model =
     case log "" msg of
         NewGame ->
             init
@@ -172,12 +183,16 @@ update msg model =
                                     , actor = Nothing
                                     , subject = Nothing
                               }
+                        mod = { model | gs = gs2 }
                     in
-                        ( findValidMoves True { model | gs = gs2 }
+                        ( if isPlayMode gs.mode then
+                              findValidMoves True mod
+                          else
+                              mod
                         , Cmd.none
                         )
                 Err _ ->
-                    ( { model | restoreState = "Invalid game state." }
+                    ( { model | message = Just "Invalid game state." }
                     , Cmd.none
                     )
         SetPage page ->
@@ -626,17 +641,16 @@ pageLinks currentPage model =
 
 view : Model -> Html Msg
 view model =
-    let mod = setMessage model
-        gs = model.gs
+    let gs = model.gs
         emptyBoard = Board.isEmptyBoard gs.board
     in
         div [ align "center"
             --deprecated, so sue me
             ]
         [ h2 [] [ text "Archmage" ]
-        , p [] [ pageLinks mod.page mod ]
+        , p [] [ pageLinks model.page model ]
         , p []
-            [ case mod.message of
+            [ case model.message of
                   Nothing ->
                       text nbsp
                   Just m ->
@@ -644,13 +658,13 @@ view model =
             ]
         , case model.page of
               GamePage ->
-                  renderGamePage mod
+                  renderGamePage model
               PublicPage ->
                   text ""
               RulesPage ->
-                  renderRulesPage mod
+                  renderRulesPage model
               HelpPage ->
-                  renderHelpPage mod
+                  renderHelpPage model
         , p []
             [ input [ type_ "text"
                     , onInput <| if not emptyBoard then
@@ -675,7 +689,7 @@ view model =
                      ]
                   [ text "Restore" ]
             ]
-        , p [] [ pageLinks model.page mod ]
+        , p [] [ pageLinks model.page model ]
         , footer
         ]
 
