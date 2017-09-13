@@ -50,6 +50,7 @@ type alias Model =
     , renderInfo : RenderInfo
     , message : Maybe String
     , restoreState : String
+    , otherHasNonKo : Bool
     , gs : GameState
     }
 
@@ -135,6 +136,7 @@ init =
               , renderInfo = Board.renderInfo pieceSize
               , message = Nothing
               , restoreState = ""
+              , otherHasNonKo = True
               , gs = initialGameState doPlaceAll
               }
         model = if not doPlaceAll then
@@ -156,12 +158,20 @@ whichBoard which model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let (mod, cmd) = updateInternal msg { model | message = Nothing }
-        mod2 = if mod.message == Nothing then
-                   setMessage mod
+        gs = mod.gs
+        mod2 = { mod
+                   | otherHasNonKo = Board.hasNonKoMoves True gs ||
+                                     (Dict.isEmpty
+                                          <| Board.validMoves
+                                              (playerColor <| otherPlayer gs.player)
+                                              gs.board)
+               }
+        mod3 = if mod.message == Nothing then
+                   setMessage mod2
                else
                    mod
     in
-        (mod2, cmd)
+        (mod3, cmd)
         
 
 updateInternal : Msg -> Model -> ( Model, Cmd Msg )
@@ -607,18 +617,22 @@ isPlayMode mode =
 endTurnButton : Model -> Html Msg
 endTurnButton model =
     let gs = model.gs
+        playMode = isPlayMode gs.mode
+        hasMoves = not <| Dict.isEmpty model.moves
         isKo = Board.isKo gs
         otherKo = if isKo then
                       False
                   else
-                      isPlayMode gs.mode &&
-                          (not <| Board.hasNonKoMoves True gs)
+                      playMode &&
+                      (gs.turnMoves /= [] || hasMoves) &&
+                      not model.otherHasNonKo
     in
         button [ onClick <| otherPlayerClick
                -- Will eventually be disabled during Ko
                , disabled
-                     <| (not <| isPlayMode gs.mode) || isKo ||
-                         (gs.isFirstMove && (not <| Dict.isEmpty model.moves))
+                     <| (not playMode) || isKo ||
+                         (gs.isFirstMove && hasMoves) ||
+                         otherKo
                , title <| if isKo then
                               "The board is in a position it has been in before. You may not end your turn now."
                           else if otherKo then
