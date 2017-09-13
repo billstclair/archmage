@@ -188,7 +188,10 @@ updateInternal msg model =
                         ( if isPlayMode gs.mode then
                               findValidMoves True mod
                           else
-                              mod
+                              { mod |
+                                    nodeSelections =
+                                        initialPlacementSelections gs.player mod
+                              }
                         , Cmd.none
                         )
                 Err _ ->
@@ -395,6 +398,39 @@ setupEmptyBoardClick which node model =
                 ( mod3 , Cmd.none )
 
 
+checkForNonKo : Model -> (Model, Bool)
+checkForNonKo model =
+    let gs = model.gs
+        firstMove = gs.isFirstMove
+    in
+        if Board.hasNonKoMoves False gs then
+            (model, False)
+        else if not firstMove || Board.hasNonKoMoves True gs then
+            let suffix = if firstMove then
+                             "Click \"End Turn\"."
+                         else
+                             "Undo or click \"End Turn\"."
+                msg = "Every sequence of moves ends in Ko. " ++ suffix
+            in
+                ( { model
+                      | message = Just msg
+                      , moves = Dict.empty
+                      , nodeSelections = []
+                  }
+                , True
+                )
+        else
+            let gs2 = { gs | mode = GameOverMode }
+            in
+                ( { model
+                      | gs = gs2
+                      , moves = Dict.empty
+                      , nodeSelections = []
+                      , message = Just "Game Over! Every sequence of moves ends in Ko for both players."
+                  }
+                , True
+                )
+
 findValidMoves : Bool -> Model -> Model
 findValidMoves gameOverIfNone model =
     let gs = model.gs
@@ -403,21 +439,29 @@ findValidMoves gameOverIfNone model =
                   | moves = moves
                   , nodeSelections = []
               }
+        (mod2, done) = if Dict.isEmpty moves then
+                           (mod, False)
+                       else
+                           checkForNonKo mod
     in
-        case highlightActors moves mod of
-            Just m ->
-                m
-            Nothing ->
-                if not gameOverIfNone then
-                    mod
-                else
-                    let player = otherPlayer gs.player
-                        otherMoves = Board.validMoves (playerColor player) gs.board
-                    in
-                        if Dict.isEmpty otherMoves then
-                            { mod | gs = { gs | mode = GameOverMode } }
-                        else
-                            mod
+        if done then
+            mod2
+        else
+            case highlightActors moves mod2 of
+                Just m ->
+                    m
+                Nothing ->
+                    if not gameOverIfNone then
+                        mod2
+                    else
+                        let player = otherPlayer gs.player
+                            otherMoves =
+                                Board.validMoves (playerColor player) gs.board
+                        in
+                            if Dict.isEmpty otherMoves then
+                                { mod2 | gs = { gs | mode = GameOverMode } }
+                            else
+                                mod2
 
 highlightActors : MovesDict -> Model -> Maybe Model
 highlightActors moves model =
