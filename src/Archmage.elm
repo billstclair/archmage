@@ -608,6 +608,11 @@ endTurnButton : Model -> Html Msg
 endTurnButton model =
     let gs = model.gs
         isKo = Board.isKo gs
+        otherKo = if isKo then
+                      False
+                  else
+                      isPlayMode gs.mode &&
+                          (not <| Board.hasNonKoMoves True gs)
     in
         button [ onClick <| otherPlayerClick
                -- Will eventually be disabled during Ko
@@ -616,10 +621,18 @@ endTurnButton model =
                          (gs.isFirstMove && (not <| Dict.isEmpty model.moves))
                , title <| if isKo then
                               "The board is in a position it has been in before. You may not end your turn now."
+                          else if otherKo then
+                              "The other player has no sequence of moves that don't end in Ko. You may not end your turn now."
                           else
                               ""
                ]
-        [ text <| if isKo then "Ko" else "End Turn" ]
+        [ text <| if isKo then
+                      "Ko"
+                  else if otherKo then
+                      "Other Ko"
+                  else
+                      "End Turn"
+        ]
 
 undoButton : Model -> Html Msg
 undoButton model =
