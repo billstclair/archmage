@@ -12,7 +12,7 @@
 module Archmage.Types exposing ( GameState, Page(..), Msg(..), Piece(..), Board, Node
                                , TheGameState(..), NodeSelection, ColoredPiece
                                , Point, PointDict, RenderInfo, Mode(..)
-                               , Color(..), Player(..)
+                               , Color(..), Player(..), GameAnalysis, emptyAnalysis
                                , NodeMsg, ClickKind(..), WhichBoard(..)
                                , Move, MovesDict, Direction(..)
                                , getBoardPiece, setBoardPiece
@@ -148,6 +148,25 @@ type alias Board =
     , nodes: Dict String Node
     }
 
+type alias GameAnalysis =
+    { moves : MovesDict
+    , isKo : Bool
+    , noMoves : Bool
+    , otherNoMoves : Bool
+    , noNonKoMoves : Bool
+    , otherNoNonKoMoves : Bool
+    }
+
+emptyAnalysis : GameAnalysis
+emptyAnalysis =
+    { moves = Dict.empty
+    , isKo = False
+    , noMoves = False
+    , otherNoMoves = False
+    , noNonKoMoves = False
+    , otherNoNonKoMoves = False
+    }
+
 type TheGameState =
     TheGameState GameState
 
@@ -162,6 +181,7 @@ type alias GameState =
     , bottomList : Board
     , history : List String     --boardToString results
     , turnMoves : List TheGameState
+    , analysis : GameAnalysis
     }
 
 getBoardPiece : String -> Board -> Maybe ColoredPiece

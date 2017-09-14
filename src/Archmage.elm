@@ -22,11 +22,11 @@ import Archmage.Types as Types
              )
 import Archmage.Pieces exposing ( drawPiece )
 import Archmage.Board as Board exposing ( initialGameState, getNode, printMove
-                                        , makeMove
+                                        , makeMove, isPlayMode
                                         , boardToString, stringToBoard
                                         , centerHoleName, centerHoleNode
                                         )
-import Archmage.Server.EncodeDecode exposing ( encodeGameState, decodeGameState )
+import Archmage.Server.EncodeDecode exposing ( encodeGameState, restoreGame )
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span
                      , input
@@ -45,12 +45,10 @@ import Debug exposing ( log )
 
 type alias Model =
     { page : Page
-    , moves : MovesDict
     , nodeSelections : List NodeSelection
     , renderInfo : RenderInfo
     , message : Maybe String
     , restoreState : String
-    , otherHasNonKo : Bool
     , gs : GameState
     }
 
@@ -61,6 +59,12 @@ main =
         , update = update
         , subscriptions = (\m -> Sub.none)
         }
+
+{-
+
+A few words about end of game.
+
+-}
 
 placementSelectionColor = "black"
 otherPlayerSelectionColor = "orange"
@@ -92,11 +96,11 @@ setMessage model =
                             WhitePlayer -> "White, "
                             BlackPlayer -> "Black, "
                     msg2 = if gs.mode == ChooseActorMode
-                             && Dict.isEmpty model.moves
+                             && Dict.isEmpty gs.analysis.moves
                            then
-                               if Board.isKo gs then
+                               if gs.analysis.isKo then
                                    "you're in Ko and no moves are possible. Undo."
-                               else if gs.turnMoves == [] then
+                               else if gs.isFirstMove then
                                    "no moves are possible. Click \"End Turn\"."
                                else
                                    "no moves are possible. Undo or click \"End Turn\"."
@@ -131,12 +135,10 @@ doPlaceAll = False --True
 init : ( Model, Cmd Msg )
 init =
     let mod = { page = GamePage
-              , moves = Dict.empty
               , nodeSelections = []
               , renderInfo = Board.renderInfo pieceSize
               , message = Nothing
               , restoreState = ""
-              , otherHasNonKo = True
               , gs = initialGameState doPlaceAll
               }
         model = if not doPlaceAll then
@@ -158,20 +160,12 @@ whichBoard which model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let (mod, cmd) = updateInternal msg { model | message = Nothing }
-        gs = mod.gs
-        mod2 = { mod
-                   | otherHasNonKo = Board.hasNonKoMoves True gs ||
-                                     (Dict.isEmpty
-                                          <| Board.validMoves
-                                              (playerColor <| otherPlayer gs.player)
-                                              gs.board)
-               }
-        mod3 = if mod.message == Nothing then
-                   setMessage mod2
+        mod2 = if mod.message == Nothing then
+                   setMessage mod
                else
                    mod
     in
-        (mod3, cmd)
+        (mod2, cmd)
         
 
 updateInternal : Msg -> Model -> ( Model, Cmd Msg )
@@ -184,7 +178,7 @@ updateInternal msg model =
             , Cmd.none
             )
         RestoreGame ->
-            case decodeGameState model.restoreState of
+            case restoreGame model.restoreState of
                 Ok gs ->
                     let gs2 = { gs | mode = if isPlayMode gs.mode then
                                                 ChooseActorMode
@@ -215,7 +209,7 @@ updateInternal msg model =
         Undo ->
             case model.gs.turnMoves of
                 TheGameState gs :: _ ->
-                    ( findValidMoves False { model | gs = gs }
+                    ( findValidMoves False { model | gs = Board.addAnalysis gs }
                     , Cmd.none
                     )
                 _ ->
@@ -245,12 +239,13 @@ updateInternal msg model =
                                                 :: gs.history
                                 }
                       in
-                          findValidMoves True { model | gs = gs2 }
+                          findValidMoves
+                              True { model | gs = Board.addAnalysis gs2 }
                     , Cmd.none
                     )
                 ChooseActorClick ->
                     let subjectSelections =
-                            case Dict.get node.name model.moves of
+                            case Dict.get node.name model.gs.analysis.moves of
                                 Nothing ->
                                     []
                                 Just moves ->
@@ -292,7 +287,7 @@ updateInternal msg model =
                                         Nothing ->
                                             "H0" --can't happen
                         targetSelections =
-                            case Dict.get actorName model.moves of
+                            case Dict.get actorName model.gs.analysis.moves of
                                 Nothing ->
                                     []
                                 Just moves ->
@@ -411,11 +406,12 @@ setupEmptyBoardClick which node model =
 checkForNonKo : Model -> (Model, Bool)
 checkForNonKo model =
     let gs = model.gs
+        analysis = gs.analysis
         firstMove = gs.isFirstMove
     in
-        if Board.hasNonKoMoves False gs then
+        if not analysis.noNonKoMoves then
             (model, False)
-        else if not firstMove || Board.hasNonKoMoves True gs then
+        else if not firstMove || not analysis.otherNoNonKoMoves then
             let suffix = if firstMove then
                              "Click \"End Turn\"."
                          else
@@ -424,31 +420,24 @@ checkForNonKo model =
             in
                 ( { model
                       | message = Just msg
-                      , moves = Dict.empty
                       , nodeSelections = []
                   }
                 , True
                 )
         else
-            let gs2 = { gs | mode = GameOverMode }
-            in
-                ( { model
-                      | gs = gs2
-                      , moves = Dict.empty
-                      , nodeSelections = []
-                      , message = Just "Game Over! Every sequence of moves ends in Ko for both players."
-                  }
-                , True
-                )
-
+            ( { model
+                  | nodeSelections = []
+                  , message = Just "Game Over! Every sequence of moves ends in Ko for both players."
+              }
+            , True
+            )
+            
 findValidMoves : Bool -> Model -> Model
 findValidMoves gameOverIfNone model =
     let gs = model.gs
-        moves = Board.validMoves (playerColor gs.player) gs.board
-        mod = { model
-                  | moves = moves
-                  , nodeSelections = []
-              }
+        analysis = gs.analysis
+        moves = analysis.moves
+        mod = { model | nodeSelections = [] }
         (mod2, done) = if Dict.isEmpty moves then
                            (mod, False)
                        else
@@ -608,24 +597,19 @@ otherPlayerClick : Msg
 otherPlayerClick =
     NodeClick OtherPlayerClick MainBoard centerHoleNode
 
-isPlayMode : Mode -> Bool
-isPlayMode mode =
-    mode == ChooseActorMode ||
-    mode == ChooseSubjectMode ||
-    mode == ChooseTargetMode
-
 endTurnButton : Model -> Html Msg
 endTurnButton model =
     let gs = model.gs
+        analysis = gs.analysis
         playMode = isPlayMode gs.mode
-        hasMoves = not <| Dict.isEmpty model.moves
-        isKo = Board.isKo gs
+        hasMoves = not analysis.noMoves
+        isKo = analysis.isKo
         otherKo = if isKo then
                       False
                   else
                       playMode &&
-                      (gs.turnMoves /= [] || hasMoves) &&
-                      not model.otherHasNonKo
+                      (not gs.isFirstMove || hasMoves) &&
+                      gs.analysis.otherNoNonKoMoves
     in
         button [ onClick <| otherPlayerClick
                -- Will eventually be disabled during Ko
@@ -650,7 +634,7 @@ endTurnButton model =
 
 undoButton : Model -> Html Msg
 undoButton model =
-    button [ disabled <| model.gs.turnMoves == []
+    button [ disabled <| model.gs.isFirstMove
            , title "Click to undo the last move."
            , onClick Undo
            ]

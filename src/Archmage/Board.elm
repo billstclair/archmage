@@ -10,7 +10,7 @@
 ----------------------------------------------------------------------
 
 module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, render
-                               , isEmptyBoard
+                               , isEmptyBoard, isPlayMode, addAnalysis
                                , whiteSetupBoard, blackSetupBoard
                                , initialCaptureBoard
                                , centerHoleName, centerHolePiece, centerHoleNode
@@ -27,7 +27,7 @@ module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, ren
 
 import Archmage.Types as Types
     exposing ( GameState, Msg(..), Board, Node, NodeSelection, TheGameState(..)
-             , Player(..)
+             , Player(..), GameAnalysis, emptyAnalysis
              , Point, PointDict, RenderInfo, Mode(..)
              , Color(..), Piece(..), ColoredPiece, NodeMsg, Move, MovesDict
              , Direction(..)
@@ -214,6 +214,7 @@ initialGameState doPlaceAll =
               , bottomList = blackSetupBoard
               , history = []
               , turnMoves = []
+              , analysis = emptyAnalysis
               }
     in
         if not doPlaceAll then
@@ -872,6 +873,10 @@ nodePiece node =
 
 makeMove : String -> GameState -> GameState
 makeMove targetName gs =
+    addAnalysis <| makeMoveInternal targetName gs
+
+makeMoveInternal : String -> GameState -> GameState
+makeMoveInternal targetName gs =
     let board = gs.board
         actor = nodePiece gs.actor
         subject = nodePiece gs.subject
@@ -923,7 +928,7 @@ makeMove targetName gs =
                     , isFirstMove = False
                     , subject = Nothing
                     , turnMoves = TheGameState { gs | mode = ChooseActorMode }
-                                  :: gs.turnMoves
+                :: gs.turnMoves
                 }
 
 doMoveCapture : ColoredPiece -> GameState -> GameState
@@ -946,6 +951,56 @@ doMoveCapture coloredPiece gs =
                 { gs | topList = newBoard }
             White ->
                 { gs | bottomList = newBoard }
+
+isPlayMode : Mode -> Bool
+isPlayMode mode =
+    mode == ChooseActorMode ||
+    mode == ChooseSubjectMode ||
+    mode == ChooseTargetMode
+
+addAnalysis : GameState -> GameState
+addAnalysis gs =
+    if isPlayMode gs.mode then
+        addAnalysisInternal gs
+    else
+        { gs | analysis = emptyAnalysis }
+
+addAnalysisInternal : GameState -> GameState
+addAnalysisInternal gs =
+    let player = gs.player
+        color = playerColor player
+        other = otherPlayer player
+        otherColor = playerColor other
+        board = gs.board
+        moves = validMoves color board
+        ko = isKo gs
+        otherMoves = validMoves otherColor board
+        noMoves = Dict.isEmpty moves
+        otherNoMoves = Dict.isEmpty otherMoves
+        noNonKoMoves = (not noMoves) && (not <| hasNonKoMoves False gs)
+        otherNoNonKoMoves = (not otherNoMoves) && (not <| hasNonKoMoves True gs)
+        analysis = { emptyAnalysis
+                       | moves = if noNonKoMoves then Dict.empty else moves
+                       , isKo = ko
+                       , noMoves = noMoves
+                       , otherNoMoves = otherNoMoves
+                       , noNonKoMoves = noNonKoMoves
+                       , otherNoNonKoMoves = otherNoNonKoMoves
+                   }
+        firstMove = gs.isFirstMove
+        gameOver = gs.isFirstMove &&
+                   ( noMoves ||
+                     noNonKoMoves
+                   ) &&
+                   ( otherNoMoves ||
+                     otherNoNonKoMoves
+                   )
+        mode = if gameOver then GameOverMode else gs.mode 
+    in
+        { gs
+            | analysis = analysis
+            , mode = mode
+        }
 
 type alias PrintedNode =
     (String, Maybe ColoredPiece)
@@ -1164,10 +1219,10 @@ hasNonKoMoves useOtherPlayer gs =
                              (False, visited)
                          move :: tail ->
                              let gs2 = { gs
-                                           | actor = Just <| log "actor" move.actor
-                                           , subject = Just <| log "subject" move.subject
+                                           | actor = Just move.actor
+                                           , subject = Just move.subject
                                        }
-                                 gs3 = makeMove (log "target" move.target.name) gs2
+                                 gs3 = makeMoveInternal move.target.name gs2
                              in
                                  if not <| isKo gs3 then
                                      (True, visited)

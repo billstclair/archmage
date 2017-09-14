@@ -10,13 +10,14 @@
 ----------------------------------------------------------------------
 
 module Archmage.Server.EncodeDecode 
-    exposing ( encodeGameState, decodeGameState
+    exposing ( encodeGameState, decodeGameState, restoreGame
              , fixCurlyQuotes
              )
 
 import Archmage.Types as Types
     exposing ( GameState, Color(..), Piece(..), Board, Node
              , ColoredPiece, Player(..), TheGameState(..)
+             , GameAnalysis, emptyAnalysis
              , Mode(..), pieceToString, stringToPiece
              , get, rget
              )
@@ -32,6 +33,14 @@ import String.Extra as SE
 --- Decoder
 ---
 
+restoreGame : String -> Result String GameState
+restoreGame restoreString =
+    case decodeGameState restoreString of
+        Ok gs ->
+            Ok <| Board.addAnalysis gs
+        Err msg ->
+            Err msg
+
 decodeGameState : String -> Result String GameState
 decodeGameState string =
     JD.decodeString gameStateDecoder string
@@ -44,7 +53,7 @@ type alias Boards =
 
 makeGameState : Player -> Mode -> Bool -> Maybe Node -> Maybe Node -> Boards -> List String -> List TheGameState -> GameState
 makeGameState player mode isFirstMove actor subject {board, topList, bottomList} history turnMoves =
-    GameState player mode isFirstMove actor subject board topList bottomList history turnMoves
+    GameState player mode isFirstMove actor subject board topList bottomList history turnMoves emptyAnalysis
 
 type alias Encoder a =
     Value -> Result String a
