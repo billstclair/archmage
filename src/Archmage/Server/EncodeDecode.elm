@@ -11,6 +11,7 @@
 
 module Archmage.Server.EncodeDecode 
     exposing ( encodeGameState, decodeGameState, restoreGame
+             , decodeMessage, encodeMessage
              , fixCurlyQuotes
              )
 
@@ -19,6 +20,7 @@ import Archmage.Types as Types
              , ColoredPiece, Player(..), TheGameState(..)
              , GameAnalysis, emptyAnalysis
              , Mode(..), pieceToString, stringToPiece
+             , Message(..)
              , get, rget
              )
 import Archmage.Board as Board
@@ -176,6 +178,11 @@ theGameStateDecoder : Decoder TheGameState
 theGameStateDecoder =
     JD.lazy (\() -> JD.map TheGameState gameStateDecoder)
 
+-- TODO
+decodeMessage : Message -> String
+decodeMessage message =
+    ""
+
 ---
 --- Encoder
 ---
@@ -194,8 +201,8 @@ gameStateEncoder gs =
         [ JE.string <| playerToString gs.player
         , JE.string <| modeToString gs.mode
         , JE.bool <| gs.isFirstMove
-        , encodeMaybeNode gs.actor
-        , encodeMaybeNode gs.subject
+        , maybeNodeEncoder gs.actor
+        , maybeNodeEncoder gs.subject
         , JE.list
             [ JE.string <| boardToString gs.board
             , JE.string <| boardToString gs.topList
@@ -206,16 +213,16 @@ gameStateEncoder gs =
               <| List.map (gameStateEncoder << getTheGameState) gs.turnMoves
         ]
 
-encodeMaybeNode : Maybe Node -> Value
-encodeMaybeNode node =
+maybeNodeEncoder : Maybe Node -> Value
+maybeNodeEncoder node =
     case node of
         Nothing ->
             JE.null
         Just n ->
-            encodeNode n
+            nodeEncoder n
 
-encodeNode : Node -> Value
-encodeNode node =
+nodeEncoder : Node -> Value
+nodeEncoder node =
     JE.list
         [ JE.string node.name
         , JE.int node.row
@@ -224,16 +231,122 @@ encodeNode node =
               Nothing ->
                   JE.null
               Just piece ->
-                  encodeColoredPiece piece
+                  coloredPieceEncoder piece
         ]
         
-encodeColoredPiece : ColoredPiece -> Value
-encodeColoredPiece (color, piece) =
+encodeColoredPiece : ColoredPiece -> String
+encodeColoredPiece piece =
+    JE.encode 0 <| coloredPieceEncoder piece
+
+coloredPieceEncoder : ColoredPiece -> Value
+coloredPieceEncoder (color, piece) =
     JE.list
         [ JE.string <| colorToString color
         , JE.string <| pieceToString piece
         ]
         
+encodeMessage : Message -> String
+encodeMessage message =
+    JE.encode 0 <| messageEncoder message
+
+messageValue : String -> String -> List (String, String) -> Value
+messageValue typ msg params =
+    let p = List.map (\(k, v) -> (k, JE.string v)) params
+    in
+        JE.list [ JE.string typ, JE.string msg, JE.object p ]
+
+messageEncoder : Message -> Value
+messageEncoder message =
+    case message of
+        RawMessage typ msg plist ->
+            messageValue typ msg plist
+        -- New game
+        NewReq { name, isPublic, restoreState } ->
+            let isPublicPairs =
+                    if isPublic then
+                        [ ("isPublic", "true") ]
+                    else
+                        []
+                rsPairs = case restoreState of
+                              Nothing ->
+                                  []
+                              Just gs ->
+                                  [ ("restoreState", encodeGameState gs) ]
+            in
+                messageValue "req" "new"
+                    <| List.concat
+                        [ [ ("name", name) ]
+                        , isPublicPairs
+                        , rsPairs
+                        ]
+        NewRsp { gameid, name } ->
+            messageValue "rsp" "new" [ ("gameid", gameid), ("name", name) ]
+        JoinReq { gameid, name } ->
+            messageValue "req" "join" [ ("gameid", gameid), ("name", name) ]
+        JoinRsp { gameid, player, name } ->
+            messageValue "rsp" "join"
+                [ ("gameid", gameid)
+                , ("player", playerToString player)
+                , ("name", name)
+                ]
+        -- Generic respones
+        UpdateRsp { gameid, gameState } ->
+            messageValue "rsp" "update"
+                [ ("gameid", gameid)
+                , ("gameState", encodeGameState gameState)
+                ]
+        -- Placement
+        SelectPlacementReq { gameid, piece } ->
+            messageValue "req" "selectPlacement"
+                [ ("gameid", gameid)
+                , ("piece", encodeColoredPiece piece)
+                ]
+        PlaceReq { gameid, piece, node } ->
+            messageValue "req" "place"
+                [ ("gameid", gameid)
+                , ("piece", encodeColoredPiece piece)
+                , ("node", node)
+                ]
+        -- Game play
+        SelectActorReq { gameid, node } ->
+            messageValue "req" "selectActor"
+                [ ("gameid", gameid)
+                , ("node", node)
+                ]
+        SelectSubjectReq { gameid, node } ->
+            messageValue "req" "selectSubject"
+                [ ("gameid", gameid)
+                , ("node", node)
+                ]
+        MoveReq { gameid, node } ->
+            messageValue "req" "move"
+                [ ("gameid", gameid)
+                , ("node", node)
+                ]
+        -- Errors
+        UndoReq { gameid } ->
+            messageValue "req" "undo" [ ("gameid", gameid) ]
+        ErrorRsp { request, text } ->
+            messageValue "rsp" "error"
+                [ ("request", request)
+                , ("text", text)
+                ]
+        -- Chat
+        ChatReq { gameid, player, text } ->
+            messageValue "req" "chat"
+                [ ("gameid", gameid)
+                , ("player", playerToString player)
+                , ("text", text)
+                ]
+        ChatRsp { gameid, player, text } ->
+            messageValue "rsp" "chat"
+                [ ("gameid", gameid)
+                , ("player", playerToString player)
+                , ("text", text)
+                ]
+        
+            
+
 ---
 --- Primitives
 ---

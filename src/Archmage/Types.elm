@@ -15,6 +15,7 @@ module Archmage.Types exposing ( GameState, Page(..), Msg(..), Piece(..), Board,
                                , Color(..), Player(..), GameAnalysis, emptyAnalysis
                                , NodeMsg, ClickKind(..), WhichBoard(..)
                                , Move, MovesDict, Direction(..)
+                               , Message(..)
                                , getBoardPiece, setBoardPiece
                                , otherColor, playerColor, otherPlayer
                                , pieceList, pieceToString, stringToPiece
@@ -333,3 +334,53 @@ adjoin a list =
 --- Backend interface
 ---
 
+type Message
+    = RawMessage String String (List (String, String))
+      | NewReq { name : String
+               , isPublic : Bool
+               , restoreState : Maybe GameState
+               }
+      | NewRsp { gameid : String
+               , name : String
+               }
+      | JoinReq { gameid : String
+                , name : String
+                }
+      | JoinRsp { gameid : String
+                , player : Player
+                , name : String
+                }
+      -- Sent as response to most commands
+      | UpdateRsp { gameid : String
+                  , gameState : GameState
+                  }
+      | SelectPlacementReq { gameid : String
+                           , piece : ColoredPiece
+                           }
+      | PlaceReq { gameid : String
+                 , piece : ColoredPiece
+                 , node : String
+                 }
+      | SelectActorReq { gameid : String
+                       , node : String
+                       }
+      | SelectSubjectReq { gameid : String
+                         , node : String
+                         }
+      | MoveReq { gameid : String
+                , node : String
+                }
+      -- Errors
+      | UndoReq { gameid : String }
+      | ErrorRsp { request : String
+                 , text : String
+                 }
+      -- Chat
+      | ChatReq { gameid : String
+                , player : Player
+                , text : String
+                }
+      | ChatRsp { gameid : String
+                , player : Player
+                , text : String
+                }
