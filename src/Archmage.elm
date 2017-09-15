@@ -189,7 +189,7 @@ updateInternal msg model =
                               }
                         mod = { model | gs = gs2 }
                     in
-                        ( if isPlayMode gs.mode then
+                        ( if isPlayMode gs2.mode then
                               findValidMoves True mod
                           else
                               { mod |
@@ -393,7 +393,8 @@ setupEmptyBoardClick which node model =
                            findValidMoves
                                True
                                { mod2
-                                   | gs = { gs3
+                                   | gs = Board.addAnalysis
+                                          { gs3
                                               | topList = Board.initialCaptureBoard
                                               , bottomList = Board.initialCaptureBoard
                                               , history = [boardToString gs3.board]

@@ -190,7 +190,7 @@ decodeMessage string =
 
 messageDecoder : Decoder Message
 messageDecoder =
-    JD.lazy (\_ -> JD.map parseRawMessage rawMessageDecoder)
+    JD.map parseRawMessage rawMessageDecoder
 
 rawMessageDecoder : Decoder Message
 rawMessageDecoder =
