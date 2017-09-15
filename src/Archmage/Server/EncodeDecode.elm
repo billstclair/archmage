@@ -129,6 +129,10 @@ nodeDecoder =
                )
         (JD.list JD.value)
 
+decodeColoredPiece : String -> Result String ColoredPiece
+decodeColoredPiece string =
+    JD.decodeString coloredPieceDecoder string
+
 coloredPieceDecoder : Decoder ColoredPiece
 coloredPieceDecoder =
     JD.andThen (\list ->
@@ -179,9 +183,273 @@ theGameStateDecoder =
     JD.lazy (\() -> JD.map TheGameState gameStateDecoder)
 
 -- TODO
-decodeMessage : Message -> String
-decodeMessage message =
-    ""
+
+decodeMessage : String -> Result String Message
+decodeMessage string =
+    JD.decodeString messageDecoder string
+
+messageDecoder : Decoder Message
+messageDecoder =
+    JD.lazy (\_ -> JD.map parseRawMessage rawMessageDecoder)
+
+rawMessageDecoder : Decoder Message
+rawMessageDecoder =
+    JD.map3 RawMessage
+        (JD.index 0 JD.string)
+        (JD.index 1 JD.string)
+        (JD.index 2 (JD.keyValuePairs JD.string))
+
+type alias MessageParams =
+    { req : Maybe String
+    , rsp : Maybe String
+    , name : Maybe String
+    , isPublic : Bool
+    , restoreState : Maybe GameState
+    , gameid : Maybe String
+    , player : Maybe Player
+    , gameState : Maybe GameState
+    , text : Maybe String
+    , piece : Maybe ColoredPiece
+    , node : Maybe String
+    , request : Maybe String
+    }
+
+rawMessageToParams : Message -> Maybe MessageParams
+rawMessageToParams message =
+    case message of
+        RawMessage typ msg plist ->
+            Just { req = if typ == "req" then Just msg else Nothing
+                 , rsp = if typ == "rsp" then Just msg else Nothing
+                 , name = get "name" plist
+                 , isPublic = Maybe.withDefault False
+                              <| maybeBool (get "isPublic" plist)
+                 , gameid = get "gameid" plist
+                 , player = maybePlayer
+                            <| get "player" plist
+                 , gameState = maybeGameState
+                               <| get "gameState" plist
+                 , text = get "text" plist
+                 , restoreState = maybeGameState
+                                  <| get "restoreState" plist
+                 , piece = maybeColoredPiece
+                           <| get "piece" plist
+                 , node = get "node" plist
+                 , request = get "request" plist
+                 }
+        _ ->
+            Nothing
+
+parseRawMessage : Message -> Message
+parseRawMessage rawMessage =
+    case rawMessageToParams rawMessage of
+        Nothing ->
+            rawMessage
+        Just params ->
+            let { req, rsp } = params
+            in
+                case (req, rsp) of
+                    (Just msg, Nothing) ->
+                        parseRequest msg params rawMessage
+                    (Nothing, Just msg) ->
+                        parseResponse msg params rawMessage
+                    _ ->
+                        rawMessage
+
+parseRequest : String -> MessageParams -> Message -> Message
+parseRequest msg params rawMessage =
+    case msg of
+        "new" ->
+            case params.name of
+                Nothing ->
+                    rawMessage
+                Just n ->
+                    NewReq { name = n
+                           , isPublic = params.isPublic
+                           , restoreState = params.restoreState
+                           }
+        "join" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    case params.name of
+                        Nothing ->
+                            rawMessage
+                        Just n ->
+                            JoinReq { gameid = gid
+                                    , name = n
+                                    }
+        "selectPlacement" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    case params.piece of
+                        Nothing ->
+                            rawMessage
+                        Just p ->
+                            SelectPlacementReq { gameid = gid
+                                               , piece = p
+                                               }
+        "place" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    case params.piece of
+                        Nothing ->
+                            rawMessage
+                        Just p ->
+                            case params.node of
+                                Nothing ->
+                                    rawMessage
+                                Just n ->
+                                    PlaceReq { gameid = gid
+                                             , piece = p
+                                             , node = n
+                                             }
+        "selectActor" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    case params.node of
+                        Nothing ->
+                            rawMessage
+                        Just n ->
+                            SelectActorReq { gameid = gid
+                                           , node = n
+                                           }
+        "selectSubject" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    case params.node of
+                        Nothing ->
+                            rawMessage
+                        Just n ->
+                            SelectSubjectReq { gameid = gid
+                                             , node = n
+                                             }
+        "move" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    case params.piece of
+                        Nothing ->
+                            rawMessage
+                        Just p ->
+                            case params.node of
+                                Nothing ->
+                                    rawMessage
+                                Just n ->
+                                    PlaceReq { gameid = gid
+                                             , piece = p
+                                             , node = n
+                                             }
+        "undo" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    UndoReq { gameid = gid }
+        "chat" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    case params.player of
+                        Nothing ->
+                            rawMessage
+                        Just p ->
+                            case params.text of
+                                Nothing ->
+                                    rawMessage
+                                Just t ->
+                                    ChatReq { gameid = gid
+                                            , player = p
+                                            , text = t
+                                            }
+        _ ->
+            rawMessage
+
+parseResponse : String -> MessageParams -> Message -> Message
+parseResponse msg params rawMessage =
+    case msg of
+        "new" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    case params.name of
+                        Nothing ->
+                            rawMessage
+                        Just n ->
+                            NewRsp { gameid = gid
+                                   , name = n
+                                   }
+        "join" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    case params.player of
+                        Nothing ->
+                            rawMessage
+                        Just p ->
+                            case params.name of
+                                Nothing ->
+                                    rawMessage
+                                Just n ->
+                                    JoinRsp { gameid = gid
+                                            , player = p
+                                            , name = n
+                                            }
+        "update" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    case params.gameState of
+                        Nothing ->
+                            rawMessage
+                        Just gs ->
+                            UpdateRsp { gameid = gid
+                                      , gameState = gs
+                                      }
+        "error" ->
+            case params.request of
+                Nothing ->
+                    rawMessage
+                Just req ->
+                    case params.text of
+                        Nothing ->
+                            rawMessage
+                        Just t ->
+                            ErrorRsp { request = req
+                                     , text = t
+                                     }
+        "chat" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    case params.player of
+                        Nothing ->
+                            rawMessage
+                        Just p ->
+                            case params.text of
+                                Nothing ->
+                                    rawMessage
+                                Just t ->
+                                    ChatRsp { gameid = gid
+                                            , player = p
+                                            , text = t
+                                            }
+        _ ->
+            rawMessage
 
 ---
 --- Encoder
@@ -428,3 +696,53 @@ fixCurlyQuotes : String -> String
 fixCurlyQuotes string =
     SE.replace leftCurlyQuote asciiQuote
         <| SE.replace rightCurlyQuote asciiQuote string
+
+maybeBool : Maybe String -> Maybe Bool
+maybeBool mb =
+    case mb of
+        Nothing ->
+            Nothing
+        Just s ->
+            case s of
+                "true" ->
+                    Just True
+                "false" ->
+                    Just False
+                _ ->
+                    Nothing
+
+maybeGameState : Maybe String -> Maybe GameState
+maybeGameState string =
+    case string of
+        Nothing ->
+            Nothing
+        Just s ->
+            case decodeGameState s of
+                Ok gs ->
+                    Just gs
+                Err _ ->
+                    Nothing
+
+maybeColoredPiece : Maybe String -> Maybe ColoredPiece
+maybeColoredPiece string =
+    case string of
+        Nothing ->
+            Nothing
+        Just s ->
+            case decodeColoredPiece s of
+                Ok piece ->
+                    Just piece
+                Err _ ->
+                    Nothing
+
+maybePlayer : Maybe String -> Maybe Player
+maybePlayer string =
+    case string of
+        Nothing ->
+            Nothing
+        Just s ->
+            case stringToPlayer s of
+                Ok player ->
+                    Just player
+                Err _ ->
+                    Nothing

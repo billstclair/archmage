@@ -354,6 +354,7 @@ type Message
       | UpdateRsp { gameid : String
                   , gameState : GameState
                   }
+      -- Placement
       | SelectPlacementReq { gameid : String
                            , piece : ColoredPiece
                            }
