@@ -182,8 +182,8 @@ blackSetupBoard =
 captureList : List (String, Int)
 captureList =
     List.map2 (\name n -> (name, n))
-        ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N"]
-        (List.range 0 13)
+        ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M"]
+        (List.range 0 12)
 
 initialCaptureBoard : Board
 initialCaptureBoard =
@@ -199,7 +199,7 @@ initialCaptureBoard =
                             captureList
     in
         { rows = 1
-        , cols = 14
+        , cols = 13
         , nodes = nodes
         }
         
@@ -231,7 +231,7 @@ initialGameState doPlaceAll =
 renderInfo : Int -> RenderInfo
 renderInfo cellSize =
     let setupCellSize = (cellSize * 2) // 3
-        captureCellSize = cellSize // 2
+        captureCellSize = cellSize * 7 // 13
         locations = Dict.fromList
                     <| List.map (\n -> (n.name, { x = n.column * cellSize
                                                 , y = n.row * cellSize
@@ -371,7 +371,6 @@ runLengthDecode chars =
                )
     in
         loop chars 0 []
-                                
 
 boardToString : Board -> String
 boardToString board =
