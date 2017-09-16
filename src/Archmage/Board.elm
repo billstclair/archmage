@@ -23,6 +23,7 @@ module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, ren
                                , pieceMoveData, namesToNodes
                                , printNode, printMove, printMoves
                                , dummyBoard
+                               , runLengthEncode, runLengthDecode
                                )
 
 import Archmage.Types as Types
@@ -322,12 +323,63 @@ nodeLessp n1 n2 =
     else
         EQ
 
+zeroCode : Int
+zeroCode =
+    Char.toCode '0'
+
+runLengthEncode : List Char -> List Char
+runLengthEncode chars =
+    let addchr = (\chr cnt res ->
+                      case cnt of
+                          0 ->
+                              res
+                          1 ->
+                              chr :: res
+                          2 ->
+                              chr :: chr :: res
+                          _ ->
+                              chr :: Char.fromCode(cnt + zeroCode) :: res
+                 )
+        loop = (\chrs chr cnt res ->
+                    case chrs of
+                        [] ->
+                            List.reverse <| addchr chr cnt res
+                        c :: tail ->
+                            if cnt == 0 then
+                                loop tail c 1 res
+                            else if c == chr && cnt < 9 then
+                                loop tail c (cnt+1) res
+                            else
+                                loop tail c 1 (addchr chr cnt res)
+               )
+    in
+        loop chars ' ' 0 []
+
+runLengthDecode : List Char -> List Char
+runLengthDecode chars =
+    let loop = (\chrs cnt res ->
+                    case chrs of
+                        [] ->
+                            List.reverse res
+                        chr :: tail ->
+                            if cnt > 0 then
+                                loop tail 0 (List.concat [List.repeat cnt chr, res])
+                            else if Char.isDigit chr then
+                                loop tail ((Char.toCode chr) - zeroCode) res
+                            else
+                                loop tail 0 (chr :: res)
+               )
+    in
+        loop chars 0 []
+                                
+
 boardToString : Board -> String
 boardToString board =
     Dict.toList board.nodes
         |> List.map Tuple.second
         |> List.sortWith nodeLessp
         |> List.map (pieceToChar << .piece)
+        |> runLengthEncode
         |> String.fromList
 
 setupRowColToNodeName : Int -> Int -> String
@@ -388,7 +440,7 @@ stringToBoard string =
                                        ) :: res
                )
     in
-        loop (String.toList string) 0 0 []                            
+        loop (runLengthDecode <| String.toList string) 0 0 []                            
 
 maxLocation : PointDict -> (Int, Int)
 maxLocation locations =
