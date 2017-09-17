@@ -157,12 +157,8 @@ processServerMessage state message =
             )
         -- Errors
         UndoReq { gameid } ->
-            case checkOnlyGameid state message gameid of
-                Err err ->
-                    (state, err)
-                Ok gameState ->
-                    updateGameStateFromResult gameid message state
-                        <| undoReq gameState
+            doGamePlay state message gameid playModes
+                undoReq
         -- Chat
         ChatReq { gameid, player, text } ->
             case checkOnlyGameid state message gameid of
@@ -243,28 +239,19 @@ doGamePlay state message gameid modes playFun =
         Err err ->
             (state, err)
         Ok gameState ->
-            updateGameStateFromResult gameid message state
-                        <| playFun gameState
-
-updateGameStateFromResult : String -> Message -> ServerState -> Result String GameState -> (ServerState, Message)
-updateGameStateFromResult gameid message state result =
-    case result of
-        Err msg ->
-            ( state, errorRsp message msg )
-        Ok gs ->
-            let message = UpdateRsp { gameid = gameid
-                                    , gameState = gs
-                                    }
-            in
-                updateGameState gameid state (gs, message)
-
-updateGameState : String -> ServerState -> (GameState, Message) -> (ServerState, Message)
-updateGameState gameid state (gameState, message) =
-    ( { state
-          | gameDict = Dict.insert gameid gameState state.gameDict
-      }
-    , message
-    )
+            case playFun gameState of
+                Err msg ->
+                    ( state, errorRsp message msg )
+                Ok gs ->
+                    let message = UpdateRsp { gameid = gameid
+                                            , gameState = gs
+                                            }
+                    in
+                        ( { state
+                              | gameDict = Dict.insert gameid gs state.gameDict
+                          }
+                        , message
+                        )
 
 joinReq : ServerState -> GameState -> Message -> String -> String -> (ServerState, Message)
 joinReq state gameState message gameid name =
@@ -279,40 +266,160 @@ joinReq state gameState message gameid name =
     in
         (st2, msg)
 
+playerList : GameState -> Board
+playerList gs =
+    case gs.player of
+        WhitePlayer ->
+            gs.topList
+        BlackPlayer ->
+            gs.bottomList
+
+setPlayerList : Board -> GameState -> GameState
+setPlayerList list gs =
+    case gs.player of
+        WhitePlayer ->
+            { gs | topList = list }
+        BlackPlayer ->
+            { gs | bottomList = list }
+
+-- Click on a piece in the top or bottom rows during placement
+-- Stores the node in GameState.subject
 selectPlacementReq : GameState -> String -> Result String GameState
 selectPlacementReq state node =
-    let list = case state.player of
-                   WhitePlayer ->
-                       state.topList
-                   BlackPlayer ->
-                       state.bottomList
-    in
-        case Board.getNode node list of
-            Nothing ->
-                Err <| "Node not found: " ++ node
-            Just n ->
+    case Board.getNode node <| playerList state of
+        Nothing ->
+            Err <| "Node not found: " ++ node
+        Just n ->
+            if n.piece == Nothing then
+                Err <| "No piece at " ++ node
+            else
                 Ok { state | subject = Just n }
 
+-- Click on an empty square in the board during placement
+-- Move the selected piece, in GameState.subject to the main board
+-- at the clicked node.
 placeReq : GameState -> String -> Result String GameState
 placeReq state node =
-    Err "placeReq not yet implemented."
+    case state.subject of
+        Nothing ->
+            Err "No subject selected."
+        Just { name, piece } ->
+            let board = state.board
+            in
+                if Board.getNode node board == Nothing then
+                    Err <| "No such board node: " ++ node
+                else
+                    let list = Types.setBoardPiece name Nothing <| playerList state
+                        timeToPlay = (state.player == BlackPlayer) &&
+                                     (Dict.isEmpty list.nodes)
+                        gs = { state
+                                 | board = Types.setBoardPiece node piece board
+                             }
+                    in
+                        if not timeToPlay then
+                            Ok <| setPlayerList list
+                                { gs | player = Types.otherPlayer gs.player }
+                        else
+                            Ok <| Board.addAnalysis
+                                { gs
+                                    | topList = Board.initialCaptureBoard
+                                    , bottomList = Board.initialCaptureBoard
+                                    , history = [boardToString gs.board]
+                                    , player = WhitePlayer
+                                }
 
+-- Click on a selected actor during game play.
+-- Store its node in GameState.actor
 selectActorReq : GameState -> String -> Result String GameState
 selectActorReq state node =
-    Err "SelectActorReq not yet implemented."
+    case state.actor of
+        Just actor ->
+            if actor.name == node then
+                Ok { state
+                       | actor = Nothing
+                       , subject = Nothing
+                   }
+            else
+                Err <| "There's already an actor selected."
+        Nothing ->
+            case Dict.get node state.analysis.moves of
+                Nothing ->
+                    Err <| "There are no valid moves for actor at: " ++ node
+                Just _ ->
+                    selectActorInternal state node
 
+selectActorInternal : GameState -> String -> Result String GameState
+selectActorInternal state node =
+    let board = state.board
+    in
+        case Board.getNode node board of
+            Nothing ->
+                Err <| "Board has no node named: " ++ node
+            Just n ->
+                case n.piece of
+                    Nothing ->
+                        Err <| "Board has no piece at: " ++ node
+                    Just (color, p) ->
+                        if color /= Types.playerColor state.player then
+                            Err <| "Attempt to select other player's piece as actor."
+                        else
+                            Ok { state | actor = Just n }
+
+-- Click on a selected subject after choosing an actor in game play.
+-- Store its node in GameState.subject
 selectSubjectReq : GameState -> String -> Result String GameState
 selectSubjectReq state node =
-    Err "SelectSubjectReq not yet implemented."
+    case state.subject of
+        Just subject ->
+            if subject.name == node then
+                Ok { state | subject = Nothing }
+            else
+                Err <| "There's already a subject selected."
+        Nothing ->
+            case state.actor of
+                Nothing ->
+                    Err "Attempt to choose a subject with no selected actor."
+                Just { name } ->
+                    case Dict.get name state.analysis.moves of
+                        Nothing ->
+                            -- can't happen, but need to do something here
+                            Err <| "There are no valid moves for actor at: " ++ name
+                        Just moves ->
+                            case LE.find (\{subject} -> subject.name == node) moves of
+                                Nothing ->
+                                    Err <| "Not a valid subject node: " ++ node
+                                Just _ ->
+                                    selectSubjectInternal state node
 
+selectSubjectInternal : GameState -> String -> Result String GameState
+selectSubjectInternal state node =
+    let board = state.board
+    in
+        case Board.getNode node board of
+            Nothing ->
+                Err <| "Board has no node named: " ++ node
+            Just n ->
+                case n.piece of
+                    Nothing ->
+                        Err <| "Board has no piece at: " ++ node
+                    Just (color, p) ->
+                        Ok { state | subject = Just n }
+
+-- Click on a selected empty target square after selecting an actor and subject.
+-- Do the move, updating GameState.board accordingly,
+-- and clearing GameState.actor and GameState.subject
 moveReq : GameState -> String -> Result String GameState
 moveReq state node =
     Err "MoveReq not yet implemented."
 
+-- Click the "End Turn" button during game play.
+-- Switch GameState.player
 endTurnReq : GameState -> Result String GameState
 endTurnReq state =
     Err "EndTurnReq not yet implemented."
 
+-- Click the "Undo" button during game play.
+-- Revert to the saved GameState.undoState
 undoReq : GameState -> Result String GameState
 undoReq state =
     case state.undoState of
