@@ -135,16 +135,20 @@ decodeColoredPiece string =
 
 coloredPieceDecoder : Decoder ColoredPiece
 coloredPieceDecoder =
-    JD.andThen (\list ->
-                    case list of
+    JD.andThen (\string ->
+                    case List.map String.fromChar (String.toList string) of
                         [color, piece] ->
-                            JD.map2 (,)
-                                (andThenSucceed colorDecoder color)
-                                (andThenSucceed pieceDecoder piece)
+                            case stringToColor color of
+                                Err msg ->
+                                    JD.fail msg
+                                Ok c ->
+                                    let p = stringToPiece piece
+                                    in
+                                        JD.succeed (c, p)
                         _ ->
-                            JD.fail "Other than 2 elements in an encoded ColoredPiece."
+                            JD.fail "Other than 2 characters in an encoded ColoredPiece."
                )
-        (JD.list JD.value)
+        JD.string
 
 colorDecoder : Decoder Color
 colorDecoder =
@@ -553,10 +557,9 @@ encodeColoredPiece piece =
 
 coloredPieceEncoder : ColoredPiece -> Value
 coloredPieceEncoder (color, piece) =
-    JE.list
-        [ JE.string <| colorToString color
-        , JE.string <| pieceToString piece
-        ]
+    JE.string
+        <| (colorToString color) ++ 
+            (pieceToString piece)
         
 encodePublicGame : PublicGame -> String
 encodePublicGame game =
