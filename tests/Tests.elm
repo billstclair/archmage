@@ -25,13 +25,19 @@ maybeLog label value =
   else
     value
 
+testMap : (x -> String -> Test) -> List x -> List Test
+testMap test data =
+    let numbers = List.map toString <| List.range 1 (List.length data)
+    in
+        List.map2 test data numbers
+
 all : Test
 all =
     Test.concat <|
         List.concat
-            [ (List.map protocolTest protocolData)
-            , (List.map boardTest boardData)
-            , (List.map gameStateTest gameStateData)
+            [ (testMap protocolTest protocolData)
+            , (testMap boardTest boardData)
+            , (testMap gameStateTest gameStateData)
             ]
 
 expectResult : Result String Message -> Result String Message -> Expectation
@@ -50,9 +56,9 @@ expectResult sb was =
                 Ok sbv ->
                     Expect.equal sbv wasv
 
-protocolTest : Message -> Test
-protocolTest message =
-    test ("protocolTest \"" ++ (toString message) ++ "\"")
+protocolTest : Message -> String -> Test
+protocolTest message name =
+    test ("protocolTest \"" ++ name ++ "\"")
         (\_ ->
              let json = maybeLog "protocolJson" <| ED.encodeMessage message
              in
@@ -118,9 +124,9 @@ expectString : String -> String -> Expectation
 expectString sb was =
     Expect.equal sb was
 
-boardTest : String -> Test
-boardTest encodedBoard =
-    test ("boardTest \"" ++ encodedBoard ++ "\"")
+boardTest : String -> String -> Test
+boardTest encodedBoard name =
+    test ("boardTest \"" ++ name ++ "\"")
         (\_ ->
              let board = stringToBoard encodedBoard
              in
@@ -140,9 +146,9 @@ boardData =
     , "--H5-w6-W--S5-O--C--H6-m-G4-t3-m"
     ]
 
-gameStateTest : String -> Test
-gameStateTest encodedGameState =
-    test ("gameStateTest \"" ++ encodedGameState ++ "\"")
+gameStateTest : String -> String -> Test
+gameStateTest encodedGameState name =
+    test ("gameStateTest \"" ++ name ++ "\"")
         (\_ ->
              case ED.decodeGameState encodedGameState of
                  Err msg ->
