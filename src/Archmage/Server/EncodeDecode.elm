@@ -11,7 +11,7 @@
 
 module Archmage.Server.EncodeDecode 
     exposing ( encodeGameState, decodeGameState, restoreGame
-             , decodeMessage, encodeMessage
+             , decodeMessage, encodeMessage, modeToString
              , fixCurlyQuotes
              )
 

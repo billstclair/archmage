@@ -16,7 +16,7 @@ module Archmage.Types exposing ( GameState, Page(..), Msg(..), Piece(..), Board,
                                , NodeMsg, ClickKind(..), WhichBoard(..)
                                , Move, MovesDict, Direction(..)
                                , Message(..), PublicGames, PublicGame, ServerState
-                               , ServerInterface(..)
+                               , ServerInterface(..), emptyPublicGames
                                , getBoardPiece, setBoardPiece
                                , otherColor, playerColor, otherPlayer
                                , pieceList, pieceToString, stringToPiece
