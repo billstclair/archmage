@@ -366,18 +366,19 @@ parseRequest msg params rawMessage =
                 Nothing ->
                     rawMessage
                 Just gid ->
-                    case params.piece of
+                    case params.node of
                         Nothing ->
                             rawMessage
-                        Just p ->
-                            case params.node of
-                                Nothing ->
-                                    rawMessage
-                                Just n ->
-                                    PlaceReq { gameid = gid
-                                             , piece = p
-                                             , node = n
-                                             }
+                        Just n ->
+                            MoveReq { gameid = gid
+                                    , node = n
+                                    }
+        "endTurn" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    EndTurnReq { gameid = gid }
         -- Public games
         "games" ->
             GamesReq
@@ -649,6 +650,10 @@ messageEncoder message =
             messageValue "req" "move"
                 [ ("gameid", gameid)
                 , ("node", node)
+                ]
+        EndTurnReq { gameid } ->
+            messageValue "req" "move"
+                [ ("gameid", gameid)
                 ]
         -- Public games
         GamesReq ->

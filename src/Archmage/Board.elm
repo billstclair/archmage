@@ -398,18 +398,16 @@ captureRowColToNodeName row col =
 
 stringToBoard : String -> Board
 stringToBoard string =
-    let len = String.length string
+    let chars = runLengthDecode <| String.toList string
+        len = List.length chars
         rows = if len <= 14 then
                    1
                else
                    7
-        cols = if len == 14 then
-                     14
-                 else
-                     7
+        cols = len // rows
         rowColToName = if len == 7 then
                            setupRowColToNodeName
-                       else if len == 14 then
+                       else if len == 13 then
                            captureRowColToNodeName
                        else
                            inodeName
@@ -438,7 +436,7 @@ stringToBoard string =
                                        ) :: res
                )
     in
-        loop (runLengthDecode <| String.toList string) 0 0 []                            
+        loop chars 0 0 []                            
 
 maxLocation : PointDict -> (Int, Int)
 maxLocation locations =

@@ -385,6 +385,7 @@ type Message
       | MoveReq { gameid : String
                 , node : String
                 }
+      | EndTurnReq { gameid : String }
       -- Public games
       | GamesReq
       | GamesRsp PublicGames
