@@ -23,7 +23,6 @@ module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, ren
                                , pieceMoveData, namesToNodes
                                , printNode, printMove, printMoves
                                , dummyBoard
-                               , runLengthEncode, runLengthDecode
                                )
 
 import Archmage.Types as Types

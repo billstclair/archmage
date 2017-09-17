@@ -18,20 +18,14 @@ module Archmage.Server.Interface exposing ( emptyServerState
                                           )
 
 import Archmage.Server.EncodeDecode exposing ( encodeMessage )
-import Archmage.Server.Error exposing ( ServerError(..), errnum )
 import Archmage.Types as Types
-    exposing ( Board, DisplayList, RenderInfo
-             , StonePile, Move(..) , MovedStone(..)
-             , History, newTurn, Message(..), ServerPhase(..)
-             , GameState, ServerState, ServerInterface(..)
-             , GameOverReason(..), RestoreState
-             , PublicGames, PublicGame, emptyPublicGames, noMessage
+    exposing ( GameState, Piece(..), Board, Node
+             , TheGameState(..), NodeSelection, ColoredPiece
+             , Mode(..), Color(..), Player(..)
+             , Message(..)                 
              , butLast, adjoin
              )
-import Archmage.Board exposing ( renderInfo, computeDisplayList, initialBoard
-                               , getNode, isLegalMove, makeMove, undoMove
-                               , canResolve, findFullHomeCircle
-                               , boardToEncodedString, encodedStringToBoard
+import Archmage.Board exposing ( initialGameState, stringToBoard, boardToString
                                )
 
 
@@ -43,10 +37,7 @@ import WebSocket
 
 emptyServerState : ServerState
 emptyServerState =
-    { playerInfoDict = Dict.empty
-    , playeridDict = Dict.empty
-    , gameDict = Dict.empty
-    , placeOnly = False
+    { gameDict = Dict.empty
     , publicGames = emptyPublicGames
     }
 
@@ -54,31 +45,12 @@ dummyGameid : String
 dummyGameid =
     "<gameid>"
 
-emptyGameState : GameState
-emptyGameState =
-    { board = initialBoard
-    , restoreState = Nothing
-    , renderInfo = renderInfo 600
-    , phase = JoinPhase
-    , unresolvedPiles = []
-    , players = 2
-    , resignedPlayers = []
-    , votedUnresolvable = []
-    , removeStoneVotes = Nothing
-    , turn = 1
-    , resolver = 1
-    , placements = Dict.empty
-    , gameid = dummyGameid
-    , history = []
-    }
-
 makeProxyServer : (ServerInterface msg -> Message -> msg) -> ServerInterface msg
 makeProxyServer wrapper =
     ServerInterface { server = ""
                     , wrapper = wrapper
                     , state = Nothing
                     , sender = proxySender
-                    , placeOnly = False
                     }
 
 makeServer : String -> msg -> ServerInterface msg
@@ -87,7 +59,6 @@ makeServer server msg =
                     , wrapper = (\_ _ -> msg)
                     , state = Nothing
                     , sender = sender
-                    , placeOnly = False
                     }
 
 getServer : ServerInterface msg -> String
@@ -118,10 +89,9 @@ sender : ServerInterface msg -> Message -> Cmd msg
 sender (ServerInterface interface) message =
     WebSocket.send interface.server (encodeMessage message)
 
-errorRsp : Message -> ServerError -> String -> Message
-errorRsp message error text =
+errorRsp : Message -> String -> Message
+errorRsp message text =
     ErrorRsp { request = encodeMessage message
-             , id = errnum error
              , text = text
              }
 
@@ -141,365 +111,115 @@ checkOnlyGameid state message gameid =
         Just gameState ->
             Ok gameState
         Nothing ->
-            Err <| errorRsp message UnknownGameidErr "Unknown gameid"
+            Err <| errorRsp message "Unknown gameid"
 
-checkGameid : ServerState -> Message -> String -> ServerPhase -> Result Message GameState
-checkGameid state message gameid phase =
+checkGameid : ServerState -> Message -> String -> List Mode -> Result Message GameState
+checkGameid state message gameid modes =
     case checkOnlyGameid state message gameid of
         Ok gameState as res ->
-            if phase == gameState.phase then
+            if List.member gameState.mode modes then
                 res
             else
                 Err
-                <| errorRsp message IllegalRequestErr
-                    ("Not " ++ (phaseToString phase) ++ " phase")
+                <| errorRsp message
+                    ("Not " ++ (modeToString mode) ++ " mode")
         err ->
             err
 
-checkOnlyPlayerid : ServerState -> Message -> String -> Result Message (GameState, Int)
-checkOnlyPlayerid state message playerid =
-    case Dict.get playerid state.playerInfoDict of
-        Nothing ->
-            Err <| errorRsp message BadPlayeridErr "Unknown player id"
-        Just { gameid, number } ->
-            case checkOnlyGameid state message gameid of
-                Err err ->
-                    Err err
-                Ok gameState ->
-                    Ok (gameState, number)
-
-checkPlayerid : ServerState -> Message -> String -> ServerPhase -> Result Message (GameState, Int)
-checkPlayerid state message playerid phase =
-    case checkOnlyPlayerid state message playerid of
-        Err _ as res ->
-            res
-        Ok (gameState, _) as res ->
-            if phase == gameState.phase then
-                res
-            else
-                Err <| errorRsp message IllegalRequestErr
-                    ("Not " ++ (phaseToString phase) ++ " phase")
-
-checkResigned : GameState -> Int -> Message -> Maybe Message
-checkResigned gameState number message =
-    case LE.find (\p -> p == number) gameState.resignedPlayers of
-        Just _ ->
-            Just <| errorRsp message IllegalRequestErr "Player has resigned"
-        Nothing ->
-            Nothing
+playModes : List Mode
+playModes =
+    [ChooseActorMode, ChooseSubjectMode, ChooseTargetMode]
 
 processServerMessage : ServerState -> Message -> (ServerState, Message)
 processServerMessage state message =
     case message of
         -- Basic game play
-        NewReq { players, name, isPublic, restoreState } ->
-            newReq state message players name isPublic restoreState
+        NewReq { name, isPublic, restoreState } ->
+            newReq state message name isPublic restoreState
         JoinReq { gameid, name } ->
-            case checkGameid state message gameid JoinPhase of
+            case checkGameid state message gameid [JoinMode] of
                 Err err ->
                     (state, err)
                 Ok gameState ->
                     joinReq state gameState message gameid name
-        PlaceReq { playerid, placement } ->
-            case (if state.placeOnly then
-                      checkOnlyPlayerid state message playerid
-                  else
-                      checkPlayerid state message playerid PlacementPhase
-                 )
-            of
+        SelectPlacementReq { gameid, piece } ->
+            case checkGameId state message gameid [SetupMode] of
+                Err err ->
+                    (state, err)
+                Ok gameState ->
+                    updateGameState state
+                        <| selectPlacementReq gameState message piece
+        PlaceReq { gameid, piece, node } ->
+            case checkGameId state message gameid [SetupMode] of
                 Err err ->
                         (state, err)
-                Ok (gameState, number) ->
-                    case checkResigned gameState number message of
-                        Just err ->
-                            (state, err)
-                        Nothing ->
-                            updateGameState state
-                                <| placeReq gameState state.placeOnly
-                                    message placement number
-        ResolveReq { playerid, resolution } ->
-            case checkPlayerid state message playerid ResolutionPhase of
+                Ok gameState ->
+                    updateGameState state
+                        <| placeReq gameState message piece node
+        SelectActorReq { gameid, node } ->
+            case checkGameId state message gameid playModes of
                 Err err ->
-                    (state, err)
-                Ok (gameState, number) ->
-                    case checkResigned gameState number message of
-                        Just err ->
-                            (state, err)
-                        Nothing ->
-                            updateGameState state
-                                <| resolveReq gameState message resolution
-        ResponseCountReq { playerid, number } ->
-            case checkOnlyPlayerid state message playerid of
+                        (state, err)
+                Ok gameState ->
+                    updateGameState state
+                        <| selectActorReq gameState message node
+        SelectSubjectReq { gameid, node } ->
+            case checkGameId state message gameid playModes of
                 Err err ->
-                    (state, err)
-                Ok (gameState, _) ->
-                    let playerInfoDict = state.playerInfoDict
-                        gameid = gameState.gameid
-                    in
-                        case Dict.get playerid playerInfoDict of
-                            Nothing ->
-                                (state, noMessage)
-                            Just info ->
-                                if number == info.responseCount then
-                                    (state, noMessage)
-                                else case createRestoreState gameid state of
-                                         Nothing ->
-                                             (state, noMessage)
-                                         Just restoreState ->
-                                             ( state
-                                             , ResponseCountRsp
-                                                   { gameid = gameid
-                                                   , number = info.responseCount
-                                                   , restoreState = restoreState
-                                                   -- TODO
-                                                   , votedUnresolvable = []
-                                                   }
-                                             )                                
-        ResignReq { playerid } ->
-            case checkOnlyPlayerid state message playerid of
+                        (state, err)
+                Ok gameState ->
+                    updateGameState state
+                        <| selectSubjectReq gameState message node
+        MoveReq { gameid, node } ->
+            case checkGameId state message gameid playModes of
                 Err err ->
-                    (state, err)
-                Ok (gameState, number) ->
-                    if List.member number gameState.resignedPlayers then
-                        ( state
-                        , errorRsp message IllegalRequestErr "Already resigned"
-                        )
-                    else
-                        let resignReason = ResignationReason number
-                            gameOverPhase = GameOverPhase resignReason
-                            gameid = gameState.gameid
-                            gameOverMessage =
-                                GameOverRsp { gameid = gameid
-                                            , reason = resignReason
-                                            }
-                            resignedPlayers = number :: gameState.resignedPlayers
-                            gameOverRes = updateGameState
-                                          state ( { gameState
-                                                      | phase = gameOverPhase
-                                                      , resignedPlayers =
-                                                          resignedPlayers
-                                                  }
-                                                , gameOverMessage
-                                                )
-                            (gs2, resignMessage) =
-                                processResign gameState gameid number resignedPlayers
-                            resignRes = updateGameState
-                                        state ( gs2 , resignMessage )
-                        in
-                            case gameState.phase of
-                                GameOverPhase _ ->
-                                    ( state
-                                    , errorRsp
-                                        message IllegalRequestErr "Game is over"
-                                    )
-                                StartPhase ->
-                                    gameOverRes
-                                JoinPhase ->
-                                    gameOverRes
-                                _ ->
-                                    if (gameState.players-1) <=
-                                        (List.length resignedPlayers)
-                                    then
-                                        gameOverRes
-                                    else
-                                        resignRes
-        UnresolvableVoteReq { playerid, vote } ->
-            case checkPlayerid state message playerid ResolutionPhase of
-                Err err ->
-                    (state, err)
-                Ok (gameState, number) ->
-                    if didAllPlayersVoteUnresolvable gameState then
-                        ( state
-                        , errorRsp
-                            message IllegalRequestErr
-                                "All players have voted unresolvable"
-                        )
-                    else
-                        let votedUnresolvable =
-                                if vote then
-                                    adjoin number gameState.votedUnresolvable
-                                else
-                                    LE.remove number gameState.votedUnresolvable
-                            gameid = gameState.gameid
-                            message = UnresolvableVoteRsp { gameid = gameid
-                                                          , number = number
-                                                          , vote = vote
-                                                          }
-                        in
-                            updateGameState state
-                                ( { gameState
-                                      | votedUnresolvable = votedUnresolvable
-                                  }
-                                , message
-                                )
-        RemoveStoneVoteReq { playerid, resolution, vote } ->
-            case checkPlayerid state message playerid ResolutionPhase of
-                Err err ->
-                    (state, err)
-                Ok (gameState, number) ->
-                    case gameState.removeStoneVotes of
-                        Nothing ->
-                            ( state
-                            , errorRsp message IllegalRequestErr
-                                "There is no outstanding stone removal vote."
-                            )
-                        Just { resolution, players } ->
-                            if not vote then
-                                updateGameState state
-                                    ( { gameState | removeStoneVotes = Nothing }
-                                    , RemoveStoneVoteRsp
-                                        { gameid = gameState.gameid
-                                        , number = number
-                                        , resolution = resolution
-                                        , vote = False
-                                        }
-                                    )
-                            else
-                                let ps = Types.adjoin number players
-                                in
-                                    if List.length ps == gameState.players then
-                                        updateGameState state
-                                            <| doResolution
-                                                { gameState
-                                                    | removeStoneVotes = Nothing
-                                                }
-                                                resolution
-                                    else
-                                        updateGameState state
-                                            ( { gameState |
-                                                    removeStoneVotes =
-                                                        Just
-                                                        { resolution = resolution
-                                                        , players = ps
-                                                        }
-                                              }
-                                            , RemoveStoneVoteRsp
-                                                { gameid = gameState.gameid
-                                                , number = number
-                                                , resolution = resolution
-                                                , vote = True
-                                                }
-                                            )
+                        (state, err)
+                Ok gameState ->
+                    updateGameState state
+                        <| moveReq gameState message node
         -- Public games
         GamesReq ->
             ( state
             , GamesRsp state.publicGames
             )
         -- Errors
-        UndoReq { playerid, message } ->
-            case checkOnlyPlayerid state message playerid of
+        UndoReq { gameid } ->
+            case checkOnlyGameid state message gameid of
                 Err err ->
                     (state, err)
-                Ok (gameState, number) ->
-                    case checkResigned gameState number message of
-                        Just err ->
-                            (state, err)
-                        Nothing ->
-                            updateGameState state
-                                <| undoReq gameState message
+                Ok gameState ->
+                    updateGameState state
+                        <| undoReq gameState message
         -- Chat
-        ChatReq { playerid, text } ->
-            case checkOnlyPlayerid state message playerid of
+        ChatReq { gameid player, text } ->
+            case checkOnlyGameid state message gameid of
                 Err err ->
                     (state, err)
-                Ok (gameState, number)  ->
+                Ok gameState  ->
                     ( state
                     , ChatRsp { gameid = gameState.gameid
+                              , player = player
                               , text = text
-                              , number = number
                               }
                     )
         _ ->
             ( state
-            , errorRsp message IllegalRequestErr "Illegal Request"
+            , errorRsp message "Illegal Request"
             )
 
-didAllPlayersVoteUnresolvable : GameState -> Bool
-didAllPlayersVoteUnresolvable gameState =
-    List.length gameState.votedUnresolvable == gameState.players
+appendGameList : PublicGames -> PublicGame -> PublicGames
+appendGameList games game =
+    List.append games [game]
 
-getPlayerNames : String -> ServerState -> Maybe (List String)
-getPlayerNames gameid state =
-    case Dict.get gameid state.playeridDict of
-        Nothing ->
-            Nothing
-        Just playerids ->
-            Just 
-                <| List.map2 (\playerid defaultName ->
-                                  case Dict.get playerid state.playerInfoDict of
-                                      Nothing ->
-                                          defaultName
-                                      Just info ->
-                                          info.name
-                             )
-                    playerids
-                    ["Player 1", "Player 2", "Player 3", "Player 4"]    
-
-createRestoreState : String -> ServerState -> Maybe RestoreState
-createRestoreState gameid state =
-    case Dict.get gameid state.gameDict of
-        Nothing ->
-            Nothing
-        Just gameState ->
-            case getPlayerNames gameid state of
-                Nothing ->
-                    Nothing
-                Just names ->
-                    Just { board = boardToEncodedString gameState.board
-                         , players = names
-                         , resolver = gameState.resolver
-                         }
-
-getGameList : PublicGames -> Int -> List PublicGame
-getGameList games players =
-    case players of
-        2 ->
-            games.twoPlayer
-        4 ->
-            games.fourPlayer
-        _ ->
-            []
-
-setGameList : PublicGames -> Int -> List PublicGame -> PublicGames
-setGameList games players publicGames =
-    case players of
-        2 ->
-            { games | twoPlayer = publicGames }
-        4 ->
-            { games | fourPlayer = publicGames }
-        _ ->
-            games
-
-appendGameList : PublicGames -> Int -> PublicGame -> PublicGames    
-appendGameList games players game =
-    setGameList games players
-        <| List.append (getGameList games players) [game]
-
-removeGameFromList : PublicGames -> String -> Int -> PublicGames
-removeGameFromList games gameid players =
-    let gameList = getGameList games players
-    in
-        setGameList games players
-            <| List.filter (\game -> game.gameid /= gameid) gameList
-
-addPlayerToPublicGame : PublicGames -> String -> Int -> String -> PublicGames
-addPlayerToPublicGame games gameid players name =
-    let gameList = getGameList games players
-    in
-        case LE.find (\game -> game.gameid == gameid) gameList of
-            Nothing ->
-                games
-            Just game ->
-                setGameList games players
-                    <| { game
-                           | playerNames =
-                               List.append game.playerNames [name]
-                       }
-                        :: (List.filter (\game -> game.gameid /= gameid) gameList)
+removeGameFromList : PublicGames -> String -> PublicGames
+removeGameFromList games gameid =
+    List.filter (\game -> game.gameid /= gameid) games
 
 maximumPublicGames : Int
 maximumPublicGames =
     10
+
+-- *** CONTINUE HERE ***
 
 newReq : ServerState -> Message -> Int -> String -> Bool -> Maybe RestoreState -> (ServerState, Message)
 newReq state message players name isPublic restoreState =

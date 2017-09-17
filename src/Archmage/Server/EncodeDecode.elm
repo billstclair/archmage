@@ -20,7 +20,7 @@ import Archmage.Types as Types
              , ColoredPiece, Player(..), TheGameState(..)
              , GameAnalysis, emptyAnalysis
              , Mode(..), pieceToString, stringToPiece
-             , Message(..)
+             , Message(..), PublicGame, PublicGames
              , get, rget
              )
 import Archmage.Board as Board
@@ -162,6 +162,29 @@ pieceDecoder : Decoder Piece
 pieceDecoder =
     JD.map stringToPiece JD.string
 
+decodePublicGames : String -> Result String PublicGames
+decodePublicGames string =
+    JD.decodeString publicGamesDecoder string
+
+publicGamesDecoder : Decoder PublicGames
+publicGamesDecoder =
+    JD.list publicGameDecoder
+
+publicGameDecoder : Decoder PublicGame
+publicGameDecoder =
+    JD.andThen
+        (\list ->
+             case list of
+                 [ gameid, playerName ] ->
+                     JD.succeed
+                         { gameid = gameid
+                         , playerName = playerName
+                         }
+                 _ ->
+                     JD.fail "Not list of gameid and player name."
+        )
+        (JD.list JD.string)
+
 boardsDecoder : Decoder Boards
 boardsDecoder =
     JD.andThen
@@ -212,6 +235,7 @@ type alias MessageParams =
     , piece : Maybe ColoredPiece
     , node : Maybe String
     , request : Maybe String
+    , games : Maybe PublicGames
     }
 
 rawMessageToParams : Message -> Maybe MessageParams
@@ -235,6 +259,8 @@ rawMessageToParams message =
                            <| get "piece" plist
                  , node = get "node" plist
                  , request = get "request" plist
+                 , games = maybePublicGames
+                           <| get "games" plist
                  }
         _ ->
             Nothing
@@ -258,6 +284,7 @@ parseRawMessage rawMessage =
 parseRequest : String -> MessageParams -> Message -> Message
 parseRequest msg params rawMessage =
     case msg of
+        -- New game
         "new" ->
             case params.name of
                 Nothing ->
@@ -279,6 +306,7 @@ parseRequest msg params rawMessage =
                             JoinReq { gameid = gid
                                     , name = n
                                     }
+        -- Placement
         "selectPlacement" ->
             case params.gameid of
                 Nothing ->
@@ -308,6 +336,7 @@ parseRequest msg params rawMessage =
                                              , piece = p
                                              , node = n
                                              }
+        -- Game play
         "selectActor" ->
             case params.gameid of
                 Nothing ->
@@ -349,12 +378,17 @@ parseRequest msg params rawMessage =
                                              , piece = p
                                              , node = n
                                              }
+        -- Public games
+        "games" ->
+            GamesReq
+        -- Errors
         "undo" ->
             case params.gameid of
                 Nothing ->
                     rawMessage
                 Just gid ->
                     UndoReq { gameid = gid }
+        -- Chat
         "chat" ->
             case params.gameid of
                 Nothing ->
@@ -378,6 +412,7 @@ parseRequest msg params rawMessage =
 parseResponse : String -> MessageParams -> Message -> Message
 parseResponse msg params rawMessage =
     case msg of
+        -- New game
         "new" ->
             case params.gameid of
                 Nothing ->
@@ -407,6 +442,7 @@ parseResponse msg params rawMessage =
                                             , player = p
                                             , name = n
                                             }
+        -- Generic responses
         "update" ->
             case params.gameid of
                 Nothing ->
@@ -419,6 +455,14 @@ parseResponse msg params rawMessage =
                             UpdateRsp { gameid = gid
                                       , gameState = gs
                                       }
+        -- Public Games
+        "games" ->
+            case params.games of
+                Nothing ->
+                    rawMessage
+                Just games ->
+                    GamesRsp games
+        -- Errors
         "error" ->
             case params.request of
                 Nothing ->
@@ -513,6 +557,21 @@ coloredPieceEncoder (color, piece) =
         , JE.string <| pieceToString piece
         ]
         
+encodePublicGame : PublicGame -> String
+encodePublicGame game =
+    JE.encode 0 <| publicGameEncoder game
+
+publicGameEncoder : PublicGame -> Value
+publicGameEncoder game =
+    JE.list
+        [ JE.string game.gameid
+        , JE.string game.playerName
+        ]
+
+encodePublicGames : PublicGames -> String
+encodePublicGames games =
+    JE.encode 0 <| JE.list (List.map publicGameEncoder games)
+
 encodeMessage : Message -> String
 encodeMessage message =
     JE.encode 0 <| messageEncoder message
@@ -591,6 +650,13 @@ messageEncoder message =
                 [ ("gameid", gameid)
                 , ("node", node)
                 ]
+        -- Public games
+        GamesReq ->
+            messageValue "req" "games"
+                []
+        GamesRsp games ->
+            messageValue "rsp" "games"
+                [ ("games", encodePublicGames games) ]
         -- Errors
         UndoReq { gameid } ->
             messageValue "req" "undo" [ ("gameid", gameid) ]
@@ -744,5 +810,17 @@ maybePlayer string =
             case stringToPlayer s of
                 Ok player ->
                     Just player
+                Err _ ->
+                    Nothing
+
+maybePublicGames : Maybe String -> Maybe PublicGames
+maybePublicGames string =
+    case string of
+        Nothing ->
+            Nothing
+        Just s ->
+            case decodePublicGames s of
+                Ok games ->
+                    Just games
                 Err _ ->
                     Nothing

@@ -15,7 +15,8 @@ module Archmage.Types exposing ( GameState, Page(..), Msg(..), Piece(..), Board,
                                , Color(..), Player(..), GameAnalysis, emptyAnalysis
                                , NodeMsg, ClickKind(..), WhichBoard(..)
                                , Move, MovesDict, Direction(..)
-                               , Message(..)
+                               , Message(..), PublicGames, PublicGame, ServerState
+                               , ServerInterface(..)
                                , getBoardPiece, setBoardPiece
                                , otherColor, playerColor, otherPlayer
                                , pieceList, pieceToString, stringToPiece
@@ -227,7 +228,8 @@ zeroPoint =
     { x = 0, y = 0 }
 
 type Mode
-    = SetupMode
+    = JoinMode
+    | SetupMode
     | ChooseActorMode
     | ChooseSubjectMode
     | ChooseTargetMode
@@ -334,6 +336,18 @@ adjoin a list =
 --- Backend interface
 ---
 
+type alias PublicGame =
+    { gameid : String
+    , playerName : String
+    }
+
+type alias PublicGames =
+    List PublicGame
+
+emptyPublicGames : PublicGames
+emptyPublicGames =
+    []
+
 type Message
     = RawMessage String String (List (String, String))
       | NewReq { name : String
@@ -371,6 +385,9 @@ type Message
       | MoveReq { gameid : String
                 , node : String
                 }
+      -- Public games
+      | GamesReq
+      | GamesRsp PublicGames
       -- Errors
       | UndoReq { gameid : String }
       | ErrorRsp { request : String
@@ -385,3 +402,16 @@ type Message
                 , player : Player
                 , text : String
                 }
+
+type alias ServerState =
+    { gameDict : Dict String GameState --gameid -> GameState
+    , publicGames : PublicGames
+    }
+
+type ServerInterface msg
+    = ServerInterface
+      { server : String
+      , wrapper : ServerInterface msg -> Message -> msg
+      , state : Maybe ServerState
+      , sender : ServerInterface msg -> Message -> Cmd msg
+      }

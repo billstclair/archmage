@@ -519,6 +519,8 @@ nodeMsg model board node =
         gs = model.gs
     in
         case gs.mode of
+            JoinMode ->
+                Nothing
             GameOverMode ->
                 Nothing
             SetupMode ->
