@@ -93,8 +93,10 @@ protocolData =
     , UpdateRsp { gameid = "asdf"
                 , gameState = Board.initialGameState True
                 }
+    , SelectPlacementReq { gameid = "asdf"
+                         , node = "A"
+                         }
     , PlaceReq { gameid = "asdf"
-               , piece = (White, HandPiece)
                , node = "A1"
                }
     , SelectActorReq { gameid = "asdf"
@@ -106,6 +108,7 @@ protocolData =
     , MoveReq { gameid = "asdf"
               , node = "A1"
               }
+    , EndTurnReq { gameid = "asdf" }
     , GamesReq
     , GamesRsp [ { gameid = "1"
                  , playerName = "Bill"

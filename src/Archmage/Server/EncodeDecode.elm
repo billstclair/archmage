@@ -314,30 +314,25 @@ parseRequest msg params rawMessage =
                 Nothing ->
                     rawMessage
                 Just gid ->
-                    case params.piece of
+                    case params.node of
                         Nothing ->
                             rawMessage
-                        Just p ->
+                        Just n ->
                             SelectPlacementReq { gameid = gid
-                                               , piece = p
+                                               , node = n
                                                }
         "place" ->
             case params.gameid of
                 Nothing ->
                     rawMessage
                 Just gid ->
-                    case params.piece of
+                    case params.node of
                         Nothing ->
                             rawMessage
-                        Just p ->
-                            case params.node of
-                                Nothing ->
-                                    rawMessage
-                                Just n ->
-                                    PlaceReq { gameid = gid
-                                             , piece = p
-                                             , node = n
-                                             }
+                        Just n ->
+                            PlaceReq { gameid = gid
+                                     , node = n
+                                     }
         -- Game play
         "selectActor" ->
             case params.gameid of
@@ -624,15 +619,14 @@ messageEncoder message =
                 , ("gameState", encodeGameState gameState)
                 ]
         -- Placement
-        SelectPlacementReq { gameid, piece } ->
+        SelectPlacementReq { gameid, node } ->
             messageValue "req" "selectPlacement"
                 [ ("gameid", gameid)
-                , ("piece", encodeColoredPiece piece)
+                , ("node", node)
                 ]
-        PlaceReq { gameid, piece, node } ->
+        PlaceReq { gameid, node } ->
             messageValue "req" "place"
                 [ ("gameid", gameid)
-                , ("piece", encodeColoredPiece piece)
                 , ("node", node)
                 ]
         -- Game play
@@ -652,7 +646,7 @@ messageEncoder message =
                 , ("node", node)
                 ]
         EndTurnReq { gameid } ->
-            messageValue "req" "move"
+            messageValue "req" "endTurn"
                 [ ("gameid", gameid)
                 ]
         -- Public games

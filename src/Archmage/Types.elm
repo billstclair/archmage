@@ -370,10 +370,9 @@ type Message
                   }
       -- Placement
       | SelectPlacementReq { gameid : String
-                           , piece : ColoredPiece
+                           , node : String
                            }
       | PlaceReq { gameid : String
-                 , piece : ColoredPiece
                  , node : String
                  }
       | SelectActorReq { gameid : String
