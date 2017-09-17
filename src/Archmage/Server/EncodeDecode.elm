@@ -24,7 +24,7 @@ import Archmage.Types as Types
              , get, rget
              )
 import Archmage.Board as Board
-    exposing ( boardToString, stringToBoard )
+    exposing ( boardToString, stringToBoard, pieceToChar, charToPiece )
         
 import Json.Decode as JD exposing ( Decoder )
 import Json.Encode as JE exposing ( Value )
@@ -136,15 +136,13 @@ decodeColoredPiece string =
 coloredPieceDecoder : Decoder ColoredPiece
 coloredPieceDecoder =
     JD.andThen (\string ->
-                    case List.map String.fromChar (String.toList string) of
-                        [color, piece] ->
-                            case stringToColor color of
-                                Err msg ->
-                                    JD.fail msg
-                                Ok c ->
-                                    let p = stringToPiece piece
-                                    in
-                                        JD.succeed (c, p)
+                    case String.toList string of
+                        [piece] ->
+                            case charToPiece piece of
+                                Nothing ->
+                                    JD.fail "Blank piece"
+                                Just p ->
+                                    JD.succeed p
                         _ ->
                             JD.fail "Other than 2 characters in an encoded ColoredPiece."
                )
@@ -556,10 +554,9 @@ encodeColoredPiece piece =
     JE.encode 0 <| coloredPieceEncoder piece
 
 coloredPieceEncoder : ColoredPiece -> Value
-coloredPieceEncoder (color, piece) =
+coloredPieceEncoder piece =
     JE.string
-        <| (colorToString color) ++ 
-            (pieceToString piece)
+        (String.fromChar <| pieceToChar (Just piece))
         
 encodePublicGame : PublicGame -> String
 encodePublicGame game =

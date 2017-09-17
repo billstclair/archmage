@@ -16,6 +16,7 @@ module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, ren
                                , centerHoleName, centerHolePiece, centerHoleNode
                                , getNode, setNode
                                , stringToBoard, boardToString
+                               , pieceToChar, charToPiece
                                , horizontalNeighbors, diagonalNeighbors
                                , allHorizontalNeighbors, allDiagonalNeighbors
                                , validMoves, validMovesForNode, makeMove
@@ -975,7 +976,12 @@ makeMoveInternal targetName gs =
                     | mode = ChooseActorMode
                     , isFirstMove = False
                     , subject = Nothing
-                    , turnMoves = TheGameState { gs | mode = ChooseActorMode }
+                    , turnMoves = TheGameState
+                                  { gs
+                                      | mode = ChooseActorMode
+                                      , actor = Nothing
+                                      , subject = Nothing
+                                  }
                 :: gs.turnMoves
                 }
 
