@@ -182,7 +182,7 @@ type alias GameState =
     , topList : Board
     , bottomList : Board
     , history : List String     --boardToString results
-    , turnMoves : List TheGameState
+    , undoState : Maybe TheGameState
     , analysis : GameAnalysis
     }
 

@@ -131,41 +131,41 @@ processServerMessage state message =
                     (state, err)
                 Ok gameState ->
                     joinReq state gameState message gameid name
-        SelectPlacementReq { gameid, piece } ->
+        SelectPlacementReq { gameid, node } ->
             case checkGameid state message gameid [SetupMode] of
                 Err err ->
                     (state, err)
                 Ok gameState ->
-                    updateGameState gameid state
-                        <| selectPlacementReq gameState message piece
-        PlaceReq { gameid, piece, node } ->
+                    updateGameStateFromResult gameid message state
+                        <| selectPlacementReq gameState node
+        PlaceReq { gameid, node } ->
             case checkGameid state message gameid [SetupMode] of
                 Err err ->
                         (state, err)
                 Ok gameState ->
-                    updateGameState gameid state
-                        <| placeReq gameState message piece node
+                    updateGameStateFromResult gameid message state
+                        <| placeReq gameState node
         SelectActorReq { gameid, node } ->
             case checkGameid state message gameid playModes of
                 Err err ->
                         (state, err)
                 Ok gameState ->
-                    updateGameState gameid state
-                        <| selectActorReq gameState message node
+                    updateGameStateFromResult gameid message state
+                        <| selectActorReq gameState node
         SelectSubjectReq { gameid, node } ->
             case checkGameid state message gameid playModes of
                 Err err ->
                         (state, err)
                 Ok gameState ->
-                    updateGameState gameid state
-                        <| selectSubjectReq gameState message node
+                    updateGameStateFromResult gameid message state
+                        <| selectSubjectReq gameState node
         MoveReq { gameid, node } ->
             case checkGameid state message gameid playModes of
                 Err err ->
                         (state, err)
                 Ok gameState ->
-                    updateGameState gameid state
-                        <| moveReq gameState message node
+                    updateGameStateFromResult gameid message state
+                        <| moveReq gameState node
         -- Public games
         GamesReq ->
             ( state
@@ -177,8 +177,8 @@ processServerMessage state message =
                 Err err ->
                     (state, err)
                 Ok gameState ->
-                    updateGameState gameid state
-                        <| undoReq gameid gameState message
+                    updateGameStateFromResult gameid message state
+                        <| undoReq gameState
         -- Chat
         ChatReq { gameid, player, text } ->
             case checkOnlyGameid state message gameid of
@@ -250,6 +250,18 @@ newReqInternal state message name isPublic restoreState =
         -- The non-proxy server will generate new gameid and playerid
         (st2, msg)
 
+updateGameStateFromResult : String -> Message -> ServerState -> Result String GameState -> (ServerState, Message)
+updateGameStateFromResult gameid message state result =
+    case result of
+        Err msg ->
+            ( state, errorRsp message msg )
+        Ok gs ->
+            let message = UpdateRsp { gameid = gameid
+                                    , gameState = gs
+                                    }
+            in
+                updateGameState gameid state (gs, message)
+
 updateGameState : String -> ServerState -> (GameState, Message) -> (ServerState, Message)
 updateGameState gameid state (gameState, message) =
     ( { state
@@ -271,48 +283,40 @@ joinReq state gameState message gameid name =
     in
         (st2, msg)
 
-selectPlacementReq : GameState -> Message -> ColoredPiece -> (GameState, Message)
-selectPlacementReq state message piece =
-    ( state
-    , errorRsp message "SelectPlacementReq not yet implemented."
-    )
-
-placeReq : GameState -> Message -> ColoredPiece -> String -> (GameState, Message)
-placeReq state message piece node =
-    let foo = 1
+selectPlacementReq : GameState -> String -> Result String GameState
+selectPlacementReq state node =
+    let list = case state.player of
+                   WhitePlayer ->
+                       state.topList
+                   BlackPlayer ->
+                       state.bottomList
     in
-        ( state
-        , errorRsp message "PlaceReq not yet implemented."
-        )
+        case Board.getNode node list of
+            Nothing ->
+                Err <| "Node not found: " ++ node
+            Just n ->
+                Ok { state | subject = Just n }
 
-selectActorReq : GameState -> Message -> String -> (GameState, Message)
-selectActorReq state message node =
-    ( state
-    , errorRsp message "SelectActorReq not yet implemented."
-    )
+placeReq : GameState -> String -> Result String GameState
+placeReq state node =
+    Err "placeReq not yet implemented."
 
-selectSubjectReq : GameState -> Message -> String -> (GameState, Message)
-selectSubjectReq state message node =
-    ( state
-    , errorRsp message "SelectSubjectReq not yet implemented."
-    )
+selectActorReq : GameState -> String -> Result String GameState
+selectActorReq state node =
+    Err "SelectActorReq not yet implemented."
 
-moveReq : GameState -> Message -> String -> (GameState, Message)
-moveReq state message node =
-    ( state
-    , errorRsp message "MoveReq not yet implemented."
-    )
+selectSubjectReq : GameState -> String -> Result String GameState
+selectSubjectReq state node =
+    Err "SelectSubjectReq not yet implemented."
 
-undoReq : String -> GameState -> Message -> (GameState, Message)
-undoReq gameid state undoMessage =
-    case state.turnMoves of
-        [] ->
-            ( state
-            , errorRsp undoMessage "No history"
-            )
-        (TheGameState gs) :: tail ->
-            ( { state | turnMoves = tail }
-            , UpdateRsp { gameid = gameid
-                        , gameState = gs
-                        }
-            )
+moveReq : GameState -> String -> Result String GameState
+moveReq state node =
+    Err "MoveReq not yet implemented."
+
+undoReq : GameState -> Result String GameState
+undoReq state =
+    case state.undoState of
+        Nothing ->
+            Err "No history"
+        Just (TheGameState gs) ->
+            Ok gs

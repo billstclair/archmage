@@ -53,9 +53,9 @@ type alias Boards =
     , bottomList : Board
     }
 
-makeGameState : Player -> Mode -> Bool -> Maybe Node -> Maybe Node -> Boards -> List String -> List TheGameState -> GameState
-makeGameState player mode isFirstMove actor subject {board, topList, bottomList} history turnMoves =
-    GameState player mode isFirstMove actor subject board topList bottomList history turnMoves emptyAnalysis
+makeGameState : Player -> Mode -> Bool -> Maybe Node -> Maybe Node -> Boards -> List String -> Maybe TheGameState -> GameState
+makeGameState player mode isFirstMove actor subject {board, topList, bottomList} history undoState =
+    GameState player mode isFirstMove actor subject board topList bottomList history undoState emptyAnalysis
 
 type alias Encoder a =
     Value -> Result String a
@@ -73,7 +73,7 @@ gameStateDecoder =
     JD.andThen
         (\list ->
              case list of
-                 [ player, mode, isFirstMove, actor, subject, boards, history, turnMoves] ->
+                 [ player, mode, isFirstMove, actor, subject, boards, history, undoState ] ->
                      JD.map8
                          makeGameState
                          (andThenSucceed playerDecoder player)
@@ -83,7 +83,7 @@ gameStateDecoder =
                          (andThenSucceed (JD.nullable nodeDecoder) subject)
                          (andThenSucceed boardsDecoder boards)
                          (andThenSucceed (JD.list JD.string) history)
-                         (andThenSucceed (JD.list theGameStateDecoder) turnMoves)
+                         (andThenSucceed (JD.nullable theGameStateDecoder) undoState)
                  _ ->
                      JD.fail "Other than 8 elements in GameState list."
         )
@@ -519,8 +519,11 @@ gameStateEncoder gs =
             , JE.string <| boardToString gs.bottomList
             ]
         , JE.list <| List.map JE.string gs.history
-        , JE.list
-              <| List.map (gameStateEncoder << getTheGameState) gs.turnMoves
+        , case gs.undoState of
+              Nothing ->
+                  JE.null
+              Just (TheGameState gs) ->
+                  gameStateEncoder gs
         ]
 
 maybeNodeEncoder : Maybe Node -> Value

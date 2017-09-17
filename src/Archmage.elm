@@ -207,8 +207,8 @@ updateInternal msg model =
             , Cmd.none
             )
         Undo ->
-            case model.gs.turnMoves of
-                TheGameState gs :: _ ->
+            case model.gs.undoState of
+                Just (TheGameState gs) ->
                     ( findValidMoves False { model | gs = Board.addAnalysis gs }
                     , Cmd.none
                     )
@@ -234,7 +234,7 @@ updateInternal msg model =
                                     | player = otherPlayer gs.player
                                     , isFirstMove = True
                                     , mode = ChooseActorMode
-                                    , turnMoves = []
+                                    , undoState = Nothing
                                     , history = Board.boardToString gs.board
                                                 :: gs.history
                                 }

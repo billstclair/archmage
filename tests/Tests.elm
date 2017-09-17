@@ -160,8 +160,17 @@ gameStateTest encodedGameState name =
                      expectString encodedGameState <| ED.encodeGameState gs
         )
 
+-- ["WP","S",true,null,null,["--hG4-wWtS9-3-O9-9-6-","-cs--mg","HC--TM-"],[],null]
+
+-- ["WP","CA",false,null,null,["--hHcC3-sSwW3-tTmM3-GO9-3-G9---","9-4-","9-4-"],["--hHcC3-sSwW3-tTmM3-gO5-G9-9-"],["WP","CA",true,null,null,["--hHcC3-sSwW3-tTmM3-gO5-G9-9-","9-4-","9-4-"],["--hHcC3-sSwW3-tTmM3-gO5-G9-9-"],null]]
+
+-- ["WP","CA",false,null,null,["-S-HCC3-S-wW3-tTMM3-GO9-3-G9---","H9-3-","9-4-"],[],["WP","CA",false,null,null,["--ShCC3-S-wW3-tTMM3-GO9-3-G9---","H9-3-","9-4-"],[],["WP","CA",false,null,null,["3-hCC3-SSwW3-tTmM3-GO9-3-G9---","H9-3-","9-4-"],[],["WP","CA",false,null,null,["--h-cC3-SSwW3-tTmM3-GO9-3-G9---","H9-3-","9-4-"],[],["WP","CA",false,null,null,["--hHcC3-sSwW3-tTmM3-GO9-3-G9---","9-4-","9-4-"],["--hHcC3-sSwW3-tTmM3-gO5-G9-9-"],["WP","CA",true,null,null,["--hHcC3-sSwW3-tTmM3-gO5-G9-9-","9-4-","9-4-"],["--hHcC3-sSwW3-tTmM3-gO5-G9-9-"],null]]]]]]
+
 gameStateData : List String
 gameStateData =
-    [ "[\"WP\",\"CA\",false,null,null,[\"--H9-3-Ww-S5-O--C--H6-m-G4-T4-\",\"GM9---\",\"tsc9--\"],[],[[\"WP\",\"CA\",false,[\"G3\",6,2,\"t\"],[\"G7\",6,6,\"M\"],[\"--H9-3-Ww-S5-O--C--H6-m-G4-t3-M\",\"G9-3-\",\"tsc9--\"],[\"--H5-w6-W--S5-O--C--H6-m-G4-t3-m\"],[[\"WP\",\"CA\",true,[\"G7\",6,6,\"m\"],[\"B2\",1,1,\"w\"],[\"--H5-w6-W--S5-O--C--H6-m-G4-t3-m\",\"G9-3-\",\"tsc9--\"],[\"--H5-w6-W--S5-O--C--H6-m-G4-t3-m\"],[]]]],[\"WP\",\"CA\",true,[\"G7\",6,6,\"m\"],[\"B2\",1,1,\"w\"],[\"--H5-w6-W--S5-O--C--H6-m-G4-t3-m\",\"G9-3-\",\"tsc9--\"],[\"--H5-w6-W--S5-O--C--H6-m-G4-t3-m\"],[]]]]"
-    , "[\"WP\",\"S\",true,null,null,[\"--hG4-wW7-tS5-O9-9-6-\",\"-cs--mg\",\"HC--TM-\"],[],[]]"
+    [ "[\"WP\",\"S\",true,null,null,[\"--hG4-wWtS9-3-O9-9-6-\",\"-cs--mg\",\"HC--TM-\"],[],null]"
+    , "[\"WP\",\"CA\",false,null,null,[\"--hHcC3-sSwW3-tTmM3-GO9-3-G9---\",\"9-4-\",\"9-4-\"],[\"--hHcC3-sSwW3-tTmM3-gO5-G9-9-\"],[\"WP\",\"CA\",true,null,null,[\"--hHcC3-sSwW3-tTmM3-gO5-G9-9-\",\"9-4-\",\"9-4-\"],[\"--hHcC3-sSwW3-tTmM3-gO5-G9-9-\"],null]]"
+    , "[\"WP\",\"CA\",false,null,null,[\"-S-HCC3-S-wW3-tTMM3-GO9-3-G9---\",\"H9-3-\",\"9-4-\"],[],[\"WP\",\"CA\",false,null,null,[\"--ShCC3-S-wW3-tTMM3-GO9-3-G9---\",\"H9-3-\",\"9-4-\"],[],[\"WP\",\"CA\",false,null,null,[\"3-hCC3-SSwW3-tTmM3-GO9-3-G9---\",\"H9-3-\",\"9-4-\"],[],[\"WP\",\"CA\",false,null,null,[\"--h-cC3-SSwW3-tTmM3-GO9-3-G9---\",\"H9-3-\",\"9-4-\"],[],[\"WP\",\"CA\",false,null,null,[\"--hHcC3-sSwW3-tTmM3-GO9-3-G9---\",\"9-4-\",\"9-4-\"],[\"--hHcC3-sSwW3-tTmM3-gO5-G9-9-\"],[\"WP\",\"CA\",true,null,null,[\"--hHcC3-sSwW3-tTmM3-gO5-G9-9-\",\"9-4-\",\"9-4-\"],[\"--hHcC3-sSwW3-tTmM3-gO5-G9-9-\"],null]]]]]]"
     ]
+
+

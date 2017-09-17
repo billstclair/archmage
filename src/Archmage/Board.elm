@@ -214,7 +214,7 @@ initialGameState doPlaceAll =
               , topList = whiteSetupBoard
               , bottomList = blackSetupBoard
               , history = []
-              , turnMoves = []
+              , undoState = Nothing
               , analysis = emptyAnalysis
               }
     in
@@ -976,13 +976,15 @@ makeMoveInternal targetName gs =
                     | mode = ChooseActorMode
                     , isFirstMove = False
                     , subject = Nothing
-                    , turnMoves = TheGameState
-                                  { gs
-                                      | mode = ChooseActorMode
-                                      , actor = Nothing
-                                      , subject = Nothing
-                                  }
-                :: gs.turnMoves
+                    , undoState = Just
+                                  <| TheGameState
+                                      { gs
+                                          | mode = ChooseActorMode
+                                          , actor = Nothing
+                                          , subject = Nothing
+                                          , analysis = emptyAnalysis
+                                      }
+                                      
                 }
 
 doMoveCapture : ColoredPiece -> GameState -> GameState
