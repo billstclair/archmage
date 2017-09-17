@@ -132,40 +132,24 @@ processServerMessage state message =
                 Ok gameState ->
                     joinReq state gameState message gameid name
         SelectPlacementReq { gameid, node } ->
-            case checkGameid state message gameid [SetupMode] of
-                Err err ->
-                    (state, err)
-                Ok gameState ->
-                    updateGameStateFromResult gameid message state
-                        <| selectPlacementReq gameState node
+            doGamePlay state message gameid [SetupMode]
+                (\gameState -> selectPlacementReq gameState node)
         PlaceReq { gameid, node } ->
-            case checkGameid state message gameid [SetupMode] of
-                Err err ->
-                        (state, err)
-                Ok gameState ->
-                    updateGameStateFromResult gameid message state
-                        <| placeReq gameState node
+            doGamePlay state message gameid [SetupMode]
+                (\gameState -> placeReq gameState node)
         SelectActorReq { gameid, node } ->
-            case checkGameid state message gameid playModes of
-                Err err ->
-                        (state, err)
-                Ok gameState ->
-                    updateGameStateFromResult gameid message state
-                        <| selectActorReq gameState node
+            doGamePlay state message gameid playModes
+                (\gameState -> selectActorReq gameState node)
         SelectSubjectReq { gameid, node } ->
-            case checkGameid state message gameid playModes of
-                Err err ->
-                        (state, err)
-                Ok gameState ->
-                    updateGameStateFromResult gameid message state
-                        <| selectSubjectReq gameState node
+            doGamePlay state message gameid playModes
+                (\gameState -> selectSubjectReq gameState node)
         MoveReq { gameid, node } ->
-            case checkGameid state message gameid playModes of
-                Err err ->
-                        (state, err)
-                Ok gameState ->
-                    updateGameStateFromResult gameid message state
-                        <| moveReq gameState node
+            doGamePlay state message gameid playModes
+                (\gameState -> moveReq gameState node)
+        EndTurnReq { gameid } ->
+            doGamePlay state message gameid playModes
+                endTurnReq
+            
         -- Public games
         GamesReq ->
             ( state
@@ -250,6 +234,18 @@ newReqInternal state message name isPublic restoreState =
         -- The non-proxy server will generate new gameid and playerid
         (st2, msg)
 
+type alias PlayFun =
+    GameState -> Result String GameState
+
+doGamePlay : ServerState -> Message -> String -> List Mode -> PlayFun -> (ServerState, Message)
+doGamePlay state message gameid modes playFun =
+    case checkGameid state message gameid modes of
+        Err err ->
+            (state, err)
+        Ok gameState ->
+            updateGameStateFromResult gameid message state
+                        <| playFun gameState
+
 updateGameStateFromResult : String -> Message -> ServerState -> Result String GameState -> (ServerState, Message)
 updateGameStateFromResult gameid message state result =
     case result of
@@ -312,6 +308,10 @@ selectSubjectReq state node =
 moveReq : GameState -> String -> Result String GameState
 moveReq state node =
     Err "MoveReq not yet implemented."
+
+endTurnReq : GameState -> Result String GameState
+endTurnReq state =
+    Err "EndTurnReq not yet implemented."
 
 undoReq : GameState -> Result String GameState
 undoReq state =
