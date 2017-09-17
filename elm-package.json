@@ -1,6 +1,6 @@
 {
     "version": "1.0.0",
-    "summary": "Arch Mage is a board game, invented by Chris St. Clair",
+    "summary": "Archmage is a board game, invented by Chris St. Clair",
     "repository": "https://github.com/billstclair/archmage.git",
     "license": "MIT",
     "source-directories": [

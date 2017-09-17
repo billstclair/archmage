@@ -31,6 +31,7 @@ all =
         List.concat
             [ (List.map protocolTest protocolData)
             , (List.map boardTest boardData)
+            , (List.map gameStateTest gameStateData)
             ]
 
 expectResult : Result String Message -> Result String Message -> Expectation
@@ -128,5 +129,30 @@ boardTest encodedBoard =
 
 boardData : List String
 boardData =
-    [ 
+    [ "--hG4-wW7-tS5-O9-9-6-"
+    , "-cs--mg"
+    , "HC--TM-"
+    , "--H9-3-Ww-S5-O--C--H6-m-G4-T4-"
+    , "GM9---"
+    , "--H9-3-Ww-S5-O--C--H6-m-G4-t3-M"
+    , "G9-3-"
+    , "tsc9--"
+    , "--H5-w6-W--S5-O--C--H6-m-G4-t3-m"
+    ]
+
+gameStateTest : String -> Test
+gameStateTest encodedGameState =
+    test ("gameStateTest \"" ++ encodedGameState ++ "\"")
+        (\_ ->
+             case ED.decodeGameState encodedGameState of
+                 Err msg ->
+                     expectString "" msg
+                 Ok gs ->
+                     expectString encodedGameState <| ED.encodeGameState gs
+        )
+
+gameStateData : List String
+gameStateData =
+    [ "[\"WP\",\"CA\",false,null,null,[\"--H9-3-Ww-S5-O--C--H6-m-G4-T4-\",\"GM9---\",\"tsc9--\"],[],[[\"WP\",\"CA\",false,[\"G3\",6,2,[\"W\",\"T\"]],[\"G7\",6,6,[\"B\",\"M\"]],[\"--H9-3-Ww-S5-O--C--H6-m-G4-t3-M\",\"G9-3-\",\"tsc9--\"],[\"--H5-w6-W--S5-O--C--H6-m-G4-t3-m\"],[[\"WP\",\"CA\",true,[\"G7\",6,6,[\"W\",\"M\"]],[\"B2\",1,1,[\"W\",\"W\"]],[\"--H5-w6-W--S5-O--C--H6-m-G4-t3-m\",\"G9-3-\",\"tsc9--\"],[\"--H5-w6-W--S5-O--C--H6-m-G4-t3-m\"],[]]]],[\"WP\",\"CA\",true,[\"G7\",6,6,[\"W\",\"M\"]],[\"B2\",1,1,[\"W\",\"W\"]],[\"--H5-w6-W--S5-O--C--H6-m-G4-t3-m\",\"G9-3-\",\"tsc9--\"],[\"--H5-w6-W--S5-O--C--H6-m-G4-t3-m\"],[]]]]"
+    , "[\"WP\",\"S\",true,null,null,[\"--hG4-wW7-tS5-O9-9-6-\",\"-cs--mg\",\"HC--TM-\"],[],[]]"
     ]
