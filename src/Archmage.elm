@@ -16,7 +16,7 @@ import Archmage.Types as Types
              , ColoredPiece, Board, Node
              , NodeSelection, RenderInfo
              , Page(..), Msg(..), Mode(..), ClickKind(..), WhichBoard(..)
-             , NodeMsg, MovesDict
+             , NodeMsg, MovesDict, PlayerNames, initialPlayerNames
              , ServerInterface, Message(..)
              , otherColor, playerColor, otherPlayer
              , setBoardPiece
@@ -52,7 +52,10 @@ type alias Model =
     , message : Maybe String
     , restoreState : String
     , gs : GameState
+    , isRemote : Bool
     , server : ServerInterface Msg
+    , gameid : String
+    , names : PlayerNames
     }
 
 main =
@@ -138,7 +141,10 @@ init =
               , message = Nothing
               , restoreState = ""
               , gs = initialGameState False
+              , isRemote = False
               , server = makeProxyServer ServerMessage
+              , gameid = ""
+              , names = initialPlayerNames
               }
         model = { mod
                     | nodeSelections = initialPlacementSelections mod.gs.player mod
@@ -146,7 +152,7 @@ init =
     in
         ( model
         , send model.server
-            <| NewReq { name ="White"
+            <| NewReq { name = model.names.white
                       , isPublic = False
                       , restoreState = Nothing
                       }
@@ -349,12 +355,26 @@ serverMessage si message model =
     let mod = { model | server = si }
         m2 = case message of
                  NewRsp { gameid, name } -> mod
-                 JoinRsp { gameid, names, gameState } -> mod
-                 UpdateRsp { gameid, gameState } -> mod
-                 GamesRsp games -> mod
-                 ErrorRsp { request, text } -> mod
+                 JoinRsp { gameid, names, gameState } ->
+                     { mod
+                         | gameid = gameid
+                         , gs = gameState
+                         , names = names
+                     }                                                         
+                 UpdateRsp { gameState } ->
+                     let gs = if model.isRemote then
+                                  Board.addAnalysis gameState
+                              else
+                                  gameState
+                     in
+                         { mod | gs = gs }
+                 GamesRsp games ->
+                     mod
+                 ErrorRsp { request, text } ->
+                     { mod | message = Just text }
                  ChatRsp { gameid, player, text } -> mod
-                 _ -> mod
+                 _ ->
+                     mod
     in
         (m2, Cmd.none)
 

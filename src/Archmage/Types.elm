@@ -16,7 +16,8 @@ module Archmage.Types exposing ( GameState, Page(..), Msg(..), Piece(..), Board,
                                , NodeMsg, ClickKind(..), WhichBoard(..)
                                , Move, MovesDict, Direction(..)
                                , Message(..), PublicGames, PublicGame, ServerState
-                               , PlayerNames, ServerInterface(..), emptyPublicGames
+                               , PlayerNames, initialPlayerNames
+                               , ServerInterface(..), emptyPublicGames
                                , getBoardPiece, setBoardPiece
                                , otherColor, playerColor, otherPlayer
                                , pieceList, pieceToString, stringToPiece
@@ -352,6 +353,12 @@ emptyPublicGames =
 type alias PlayerNames =
     { white : String
     , black : String
+    }
+
+initialPlayerNames : PlayerNames
+initialPlayerNames =
+    { white = "White"
+    , black = "Black"
     }
 
 type Message

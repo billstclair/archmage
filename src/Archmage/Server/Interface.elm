@@ -20,7 +20,7 @@ import Archmage.Types as Types
     exposing ( GameState, Piece(..), Board, Node
              , TheGameState(..), NodeSelection, ColoredPiece
              , Mode(..), Color(..), Player(..)
-             , Message(..), ServerInterface(..), PlayerNames
+             , Message(..), ServerInterface(..), PlayerNames, initialPlayerNames
              , ServerState, PublicGames, PublicGame, emptyPublicGames
              , butLast, adjoin
              )
@@ -36,16 +36,10 @@ import List.Extra as LE
 import Debug exposing ( log )
 import WebSocket
 
-initialNames : PlayerNames
-initialNames =
-    { white = "White"
-    , black = "Black"
-    }
-
 emptyServerState : ServerState
 emptyServerState =
     { gameDict = Dict.empty
-    , names = initialNames
+    , names = initialPlayerNames
     , publicGames = emptyPublicGames
     }
 
@@ -221,7 +215,7 @@ newReqInternal state message name isPublic restoreState =
         st2 = { state
                   | gameDict =
                       Dict.insert gameid (Board.addAnalysis gameState) state.gameDict
-                  , names = { initialNames | white = name }
+                  , names = { initialPlayerNames | white = name }
                   , publicGames =
                     if isPublic then
                         appendGameList state.publicGames
