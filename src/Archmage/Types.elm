@@ -16,7 +16,7 @@ module Archmage.Types exposing ( GameState, Page(..), Msg(..), Piece(..), Board,
                                , NodeMsg, ClickKind(..), WhichBoard(..)
                                , Move, MovesDict, Direction(..)
                                , Message(..), PublicGames, PublicGame, ServerState
-                               , ServerInterface(..), emptyPublicGames
+                               , PlayerNames, ServerInterface(..), emptyPublicGames
                                , getBoardPiece, setBoardPiece
                                , otherColor, playerColor, otherPlayer
                                , pieceList, pieceToString, stringToPiece
@@ -51,7 +51,8 @@ type WhichBoard
     | MainBoard
 
 type Msg
-    = SetChatInput String
+    = ServerMessage (ServerInterface Msg) Message
+    | SetChatInput String
     | SendChat
     | ChatKeydown Int
     | ChatScroll Float
@@ -348,6 +349,11 @@ emptyPublicGames : PublicGames
 emptyPublicGames =
     []
 
+type alias PlayerNames =
+    { white : String
+    , black : String
+    }
+
 type Message
     = RawMessage String String (List (String, String))
       | NewReq { name : String
@@ -361,8 +367,8 @@ type Message
                 , name : String
                 }
       | JoinRsp { gameid : String
-                , player : Player
-                , name : String
+                , names : PlayerNames
+                , gameState : GameState
                 }
       -- Sent as response to most commands
       | UpdateRsp { gameid : String
@@ -405,6 +411,7 @@ type Message
 
 type alias ServerState =
     { gameDict : Dict String GameState --gameid -> GameState
+    , names : PlayerNames
     , publicGames : PublicGames
     }
 

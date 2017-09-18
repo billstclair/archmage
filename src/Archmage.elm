@@ -17,6 +17,7 @@ import Archmage.Types as Types
              , NodeSelection, RenderInfo
              , Page(..), Msg(..), Mode(..), ClickKind(..), WhichBoard(..)
              , NodeMsg, MovesDict
+             , ServerInterface, Message(..)
              , otherColor, playerColor, otherPlayer
              , setBoardPiece
              )
@@ -27,6 +28,7 @@ import Archmage.Board as Board exposing ( initialGameState, getNode, printMove
                                         , centerHoleName, centerHoleNode
                                         )
 import Archmage.Server.EncodeDecode exposing ( encodeGameState, restoreGame )
+import Archmage.Server.Interface exposing ( makeProxyServer, makeServer, send )
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span
                      , input
@@ -50,6 +52,7 @@ type alias Model =
     , message : Maybe String
     , restoreState : String
     , gs : GameState
+    , server : ServerInterface Msg
     }
 
 main =
@@ -127,11 +130,6 @@ initialPlacementSelections player model =
             Nothing -> []
             Just node -> [ (placementSelectionColor, node.name) ]
 
--- Set true to place all the pieces at startup.
--- Used to speed debugging of the move code.
-doPlaceAll : Bool
-doPlaceAll = False --True
-
 init : ( Model, Cmd Msg )
 init =
     let mod = { page = GamePage
@@ -139,16 +137,20 @@ init =
               , renderInfo = Board.renderInfo pieceSize
               , message = Nothing
               , restoreState = ""
-              , gs = initialGameState doPlaceAll
+              , gs = initialGameState False
+              , server = makeProxyServer ServerMessage
               }
-        model = if not doPlaceAll then
-                    { mod
-                        | nodeSelections = initialPlacementSelections mod.gs.player mod
-                    }
-                else
-                    findValidMoves True mod
+        model = { mod
+                    | nodeSelections = initialPlacementSelections mod.gs.player mod
+                }
     in
-        ( model, Cmd.none )
+        ( model
+        , send model.server
+            <| NewReq { name ="White"
+                      , isPublic = False
+                      , restoreState = Nothing
+                      }
+        )
 
 whichBoard : WhichBoard -> Model -> Board
 whichBoard which model =
@@ -167,12 +169,13 @@ update msg model =
     in
         (mod2, cmd)
         
-
 updateInternal : Msg -> Model -> ( Model, Cmd Msg )
 updateInternal msg model =
     case log "" msg of
         NewGame ->
             init
+        ServerMessage si message ->
+            serverMessage si message model
         SetRestoreState text ->
             ( { model | restoreState = text }
             , Cmd.none
@@ -339,6 +342,21 @@ updateInternal msg model =
                     )
         _ ->
             ( model, Cmd.none )
+
+-- ** CONTINUE HERE **
+serverMessage : ServerInterface Msg -> Message -> Model -> (Model, Cmd Msg)
+serverMessage si message model =
+    let mod = { model | server = si }
+        m2 = case message of
+                 NewRsp { gameid, name } -> mod
+                 JoinRsp { gameid, names, gameState } -> mod
+                 UpdateRsp { gameid, gameState } -> mod
+                 GamesRsp games -> mod
+                 ErrorRsp { request, text } -> mod
+                 ChatRsp { gameid, player, text } -> mod
+                 _ -> mod
+    in
+        (m2, Cmd.none)
 
 setupEmptyBoardClick : WhichBoard -> Node -> Model -> (Model, Cmd Msg)
 setupEmptyBoardClick which node model =

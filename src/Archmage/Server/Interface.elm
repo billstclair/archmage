@@ -20,7 +20,7 @@ import Archmage.Types as Types
     exposing ( GameState, Piece(..), Board, Node
              , TheGameState(..), NodeSelection, ColoredPiece
              , Mode(..), Color(..), Player(..)
-             , Message(..), ServerInterface(..)
+             , Message(..), ServerInterface(..), PlayerNames
              , ServerState, PublicGames, PublicGame, emptyPublicGames
              , butLast, adjoin
              )
@@ -36,9 +36,16 @@ import List.Extra as LE
 import Debug exposing ( log )
 import WebSocket
 
+initialNames : PlayerNames
+initialNames =
+    { white = "White"
+    , black = "Black"
+    }
+
 emptyServerState : ServerState
 emptyServerState =
     { gameDict = Dict.empty
+    , names = initialNames
     , publicGames = emptyPublicGames
     }
 
@@ -214,6 +221,7 @@ newReqInternal state message name isPublic restoreState =
         st2 = { state
                   | gameDict =
                       Dict.insert gameid (Board.addAnalysis gameState) state.gameDict
+                  , names = { initialNames | white = name }
                   , publicGames =
                     if isPublic then
                         appendGameList state.publicGames
@@ -255,12 +263,15 @@ doGamePlay state message gameid modes playFun =
 
 joinReq : ServerState -> GameState -> Message -> String -> String -> (ServerState, Message)
 joinReq state gameState message gameid name =
-    let msg = JoinRsp { gameid = gameid
-                      , player = BlackPlayer
-                      , name = name
+    let names = state.names
+        nms = { names | black = name }
+        msg = JoinRsp { gameid = gameid
+                      , names = nms
+                      , gameState = gameState
                       }
         st2 = { state
-                  | publicGames =
+                  | names = nms
+                  , publicGames =
                       removeGameFromList state.publicGames gameid
               }
     in

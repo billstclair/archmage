@@ -20,7 +20,7 @@ import Archmage.Types as Types
              , ColoredPiece, Player(..), TheGameState(..)
              , GameAnalysis, emptyAnalysis
              , Mode(..), pieceToString, stringToPiece
-             , Message(..), PublicGame, PublicGames
+             , Message(..), PublicGame, PublicGames, PlayerNames
              , get, rget
              )
 import Archmage.Board as Board
@@ -148,6 +148,16 @@ coloredPieceDecoder =
                )
         JD.string
 
+decodePlayerNames : String -> Result String PlayerNames
+decodePlayerNames string =
+    JD.decodeString playerNamesDecoder string
+
+playerNamesDecoder : Decoder PlayerNames
+playerNamesDecoder =
+    JD.map2 PlayerNames
+        (JD.field "white" JD.string)
+        (JD.field "black" JD.string)
+
 colorDecoder : Decoder Color
 colorDecoder =
     JD.andThen
@@ -228,6 +238,7 @@ type alias MessageParams =
     { req : Maybe String
     , rsp : Maybe String
     , name : Maybe String
+    , names : Maybe PlayerNames
     , isPublic : Bool
     , restoreState : Maybe GameState
     , gameid : Maybe String
@@ -247,6 +258,8 @@ rawMessageToParams message =
             Just { req = if typ == "req" then Just msg else Nothing
                  , rsp = if typ == "rsp" then Just msg else Nothing
                  , name = get "name" plist
+                 , names = maybePlayerNames
+                           <| get "names" plist
                  , isPublic = Maybe.withDefault False
                               <| maybeBool (get "isPublic" plist)
                  , gameid = get "gameid" plist
@@ -428,17 +441,17 @@ parseResponse msg params rawMessage =
                 Nothing ->
                     rawMessage
                 Just gid ->
-                    case params.player of
+                    case params.names of
                         Nothing ->
                             rawMessage
-                        Just p ->
-                            case params.name of
+                        Just ns ->
+                            case params.gameState of
                                 Nothing ->
                                     rawMessage
-                                Just n ->
+                                Just gs ->
                                     JoinRsp { gameid = gid
-                                            , player = p
-                                            , name = n
+                                            , names = ns
+                                            , gameState = gs
                                             }
         -- Generic responses
         "update" ->
@@ -556,6 +569,16 @@ coloredPieceEncoder piece =
     JE.string
         (String.fromChar <| pieceToChar (Just piece))
         
+encodePlayerNames : PlayerNames -> String
+encodePlayerNames names =
+    JE.encode 0 <| playerNamesEncoder names
+
+playerNamesEncoder : PlayerNames -> Value
+playerNamesEncoder names =
+    JE.object [ ("white", JE.string names.white)
+              , ("black", JE.string names.black)
+              ]
+
 encodePublicGame : PublicGame -> String
 encodePublicGame game =
     JE.encode 0 <| publicGameEncoder game
@@ -609,11 +632,11 @@ messageEncoder message =
             messageValue "rsp" "new" [ ("gameid", gameid), ("name", name) ]
         JoinReq { gameid, name } ->
             messageValue "req" "join" [ ("gameid", gameid), ("name", name) ]
-        JoinRsp { gameid, player, name } ->
+        JoinRsp { gameid, names, gameState } ->
             messageValue "rsp" "join"
                 [ ("gameid", gameid)
-                , ("player", playerToString player)
-                , ("name", name)
+                , ("names", encodePlayerNames names)
+                , ("gameState", encodeGameState gameState)
                 ]
         -- Generic respones
         UpdateRsp { gameid, gameState } ->
@@ -812,6 +835,18 @@ maybePlayer string =
             case stringToPlayer s of
                 Ok player ->
                     Just player
+                Err _ ->
+                    Nothing
+
+maybePlayerNames : Maybe String -> Maybe PlayerNames
+maybePlayerNames string =
+    case string of
+        Nothing ->
+            Nothing
+        Just s ->
+            case decodePlayerNames s of
+                Ok names ->
+                    Just names
                 Err _ ->
                     Nothing
 

@@ -87,8 +87,10 @@ protocolData =
              }
     , JoinReq { gameid = "asdf", name = "bill" }
     , JoinRsp { gameid = "asdf"
-              , player = WhitePlayer
-              , name = "bill"
+              , names = { white = "bill"
+                        , black = "chris"
+                        }
+              , gameState = Board.initialGameState True
               }
     , UpdateRsp { gameid = "asdf"
                 , gameState = Board.initialGameState True
