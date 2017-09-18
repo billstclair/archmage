@@ -326,6 +326,7 @@ placeReq state node =
                                     , bottomList = Board.initialCaptureBoard
                                     , history = [boardToString gs.board]
                                     , player = WhitePlayer
+                                    , isFirstMove = True
                                 }
 
 -- Click on a selected actor during game play.
@@ -410,13 +411,59 @@ selectSubjectInternal state node =
 -- and clearing GameState.actor and GameState.subject
 moveReq : GameState -> String -> Result String GameState
 moveReq state node =
-    Err "MoveReq not yet implemented."
+    case (state.actor, state.subject) of
+        (Just actor, Just {name}) ->
+            case Dict.get actor.name state.analysis.moves of
+                Nothing ->
+                    Err <| "There are no valid moves for actor at: " ++ actor.name
+                Just moves ->
+                    case LE.find (\{subject, target} ->
+                                   name == subject.name &&
+                                   node == target.name
+                                 )
+                                   moves
+                    of
+                        Nothing ->
+                            Err
+                            <| "There is no move with selected actor and subject to node: "
+                                ++ node
+                        Just _ ->
+                            Ok <| Board.makeMove node state
+        _ ->
+            Err <| if state.actor == Nothing then
+                       "No actor is selected."
+                   else
+                       "No subject is selected."
 
 -- Click the "End Turn" button during game play.
 -- Switch GameState.player
 endTurnReq : GameState -> Result String GameState
 endTurnReq state =
-    Err "EndTurnReq not yet implemented."
+    let isFirstMove = state.isFirstMove
+        analysis = state.analysis
+        isKo = analysis.isKo
+        noMoves = analysis.noMoves
+        otherNoNonKoMoves = analysis.otherNoNonKoMoves
+    in
+        if isFirstMove && not noMoves then
+            Err "You may not end your turn on the first move unless you have no moves."
+        else if isKo then
+            Err "You may not end your turn while in Ko."
+        else if otherNoNonKoMoves then
+            Err "You may not end your turn when the other player has no non-Ko moves."
+        else
+            let gs = { state
+                         | player = Types.otherPlayer state.player
+                         , isFirstMove = True
+                         , mode = ChooseActorMode
+                         , actor = Nothing
+                         , subject = Nothing
+                         , undoState = Nothing
+                         , history = Board.boardToString state.board
+                                     :: state.history
+                     }
+            in
+                Ok <| Board.addAnalysis gs            
 
 -- Click the "Undo" button during game play.
 -- Revert to the saved GameState.undoState

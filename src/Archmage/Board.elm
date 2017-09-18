@@ -975,6 +975,7 @@ makeMoveInternal targetName gs =
                 { gs3
                     | mode = ChooseActorMode
                     , isFirstMove = False
+                    , actor = Nothing
                     , subject = Nothing
                     , undoState = Just
                                   <| TheGameState
