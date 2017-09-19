@@ -746,7 +746,8 @@ stringToColor string =
 
 modePlist : List (String, Mode)
 modePlist =
-    [ ("S", SetupMode)
+    [ ("J", JoinMode)
+    , ("S", SetupMode)
     , ("CA", ChooseActorMode)
     , ("CS", ChooseSubjectMode)
     , ("CT", ChooseTargetMode)

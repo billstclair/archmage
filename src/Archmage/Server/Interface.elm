@@ -103,6 +103,24 @@ checkOnlyGameid state message gameid =
         Nothing ->
             Err <| errorRsp message "Unknown gameid"
 
+modePlist : List (String, Mode)
+modePlist =
+    [ ("Join", JoinMode)
+    , ("Setup", SetupMode)
+    , ("ChooseActor", ChooseActorMode)
+    , ("ChooseSubject", ChooseSubjectMode)
+    , ("ChooseTarget", ChooseTargetMode)
+    , ("GameOver", GameOverMode)
+    ]
+
+modeToName : Mode -> String
+modeToName mode =
+    case Types.rget mode modePlist of
+        Just s ->
+            s
+        Nothing ->
+            "Unknown" --can't happen
+
 checkGameid : ServerState -> Message -> String -> List Mode -> Result Message GameState
 checkGameid state message gameid modes =
     case checkOnlyGameid state message gameid of
@@ -211,10 +229,12 @@ newReqInternal state message name isPublic restoreState =
                             initialGameState False
                         Just gs ->
                             gs
+        gs = Board.addAnalysis
+             { gameState | mode = JoinMode }
         gameid = dummyGameid
         st2 = { state
                   | gameDict =
-                      Dict.insert gameid (Board.addAnalysis gameState) state.gameDict
+                      Dict.insert gameid gs state.gameDict
                   , names = { initialPlayerNames | white = name }
                   , publicGames =
                     if isPublic then
@@ -255,16 +275,31 @@ doGamePlay state message gameid modes playFun =
                         , message
                         )
 
+initialPlacementSubject : GameState -> Maybe Node
+initialPlacementSubject gs =
+    let board = case gs.player of
+                    WhitePlayer -> gs.topList
+                    BlackPlayer -> gs.bottomList
+        nodes = Dict.values board.nodes
+                |> List.sortBy .column
+    in
+        LE.find (\node -> node.piece /= Nothing) nodes
+
 joinReq : ServerState -> GameState -> Message -> String -> String -> (ServerState, Message)
 joinReq state gameState message gameid name =
     let names = state.names
         nms = { names | black = name }
+        gs = { gameState
+                 | mode = SetupMode
+                 , subject = initialPlacementSubject gameState
+             }
         msg = JoinRsp { gameid = gameid
                       , names = nms
-                      , gameState = gameState
+                      , gameState = gs
                       }
         st2 = { state
-                  | names = nms
+                  | gameDict = Dict.insert gameid gs state.gameDict
+                  , names = nms
                   , publicGames =
                       removeGameFromList state.publicGames gameid
               }
@@ -322,8 +357,10 @@ placeReq state node =
                              }
                     in
                         if not timeToPlay then
-                            Ok <| setPlayerList list
-                                { gs | player = Types.otherPlayer gs.player }
+                            let gs2 = { gs | player = Types.otherPlayer gs.player }
+                            in
+                                Ok <| setPlayerList list
+                                    { gs2 | subject = initialPlacementSubject gs2 }
                         else
                             Ok <| Board.addAnalysis
                                 { gs

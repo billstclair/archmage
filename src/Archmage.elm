@@ -26,8 +26,12 @@ import Archmage.Board as Board exposing ( initialGameState, getNode, printMove
                                         , makeMove, isPlayMode
                                         , boardToString, stringToBoard
                                         , centerHoleName, centerHoleNode
+                                        , pieceToChar
                                         )
-import Archmage.Server.EncodeDecode exposing ( encodeGameState, restoreGame )
+import Archmage.Server.EncodeDecode
+    exposing ( encodeGameState, restoreGame
+             , encodeMessage, decodeMessage
+             )
 import Archmage.Server.Interface exposing ( makeProxyServer, makeServer, send )
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span
@@ -177,7 +181,7 @@ update msg model =
         
 updateInternal : Msg -> Model -> ( Model, Cmd Msg )
 updateInternal msg model =
-    case log "" msg of
+    case msg of
         NewGame ->
             init
         ServerMessage si message ->
@@ -349,34 +353,105 @@ updateInternal msg model =
         _ ->
             ( model, Cmd.none )
 
--- ** CONTINUE HERE **
+emptyBoard : Board
+emptyBoard =
+    { rows = 0
+    , cols = 0
+    , nodes = Dict.empty
+    }
+
+stripGameState : GameState -> GameState
+stripGameState gs =
+    { gs
+        | topList = emptyBoard
+        , bottomList = emptyBoard
+        , board = emptyBoard
+        , history = []
+        , undoState = Nothing
+        , analysis = Types.emptyAnalysis
+    }
+    
+coloredPieceToString : ColoredPiece -> String
+coloredPieceToString piece =
+    (String.fromChar <| pieceToChar (Just piece))
+
+printNodeName : Maybe Node -> String
+printNodeName node =
+    case node of
+        Nothing ->
+            "none"
+        Just {name, piece} ->
+            name ++ (case piece of
+                         Nothing ->
+                             ""
+                         Just p ->
+                             " " ++ (coloredPieceToString p)
+                    )
+
+printGameState : GameState -> String
+printGameState gs =
+    let {player, mode, isFirstMove, actor, subject} = gs
+    in
+        "player: " ++ (toString player) ++
+        ", mode: " ++ (toString mode) ++
+        ", firstMove: " ++ (toString isFirstMove) ++
+        ", actor: " ++ (printNodeName actor) ++
+        ", subject: " ++ (printNodeName subject)
+
+printMessage : Message -> String
+printMessage message =
+    case message of
+        JoinRsp {gameid, names, gameState} ->
+            "JoinRsp, gameid: " ++ gameid ++
+                ", names: (" ++ names.white ++ ", " ++ names.black ++
+                "), " ++ (printGameState gameState)
+        UpdateRsp {gameid, gameState} ->
+            "UpdateRsp, gameid: " ++ (printGameState gameState)
+        _ ->
+            encodeMessage message
+
 serverMessage : ServerInterface Msg -> Message -> Model -> (Model, Cmd Msg)
 serverMessage si message model =
     let mod = { model | server = si }
-        m2 = case message of
-                 NewRsp { gameid, name } -> mod
-                 JoinRsp { gameid, names, gameState } ->
-                     { mod
-                         | gameid = gameid
-                         , gs = gameState
-                         , names = names
-                     }                                                         
-                 UpdateRsp { gameState } ->
-                     let gs = if model.isRemote then
-                                  Board.addAnalysis gameState
-                              else
-                                  gameState
-                     in
-                         { mod | gs = gs }
-                 GamesRsp games ->
-                     mod
-                 ErrorRsp { request, text } ->
-                     { mod | message = Just text }
-                 ChatRsp { gameid, player, text } -> mod
-                 _ ->
-                     mod
+        ignore = log "message" <| printMessage message
     in
-        (m2, Cmd.none)
+        case message of
+            NewRsp { gameid } ->
+                ( { mod
+                      | gameid = gameid
+                  }
+                -- This will be Cmd.none when we're in remote mode
+                , send mod.server
+                    <| JoinReq { gameid = gameid
+                               , name = "Black"
+                               }
+                )
+            _ ->
+                let m2 = case message of
+                             JoinRsp { gameid, names, gameState } ->
+                                 { mod
+                                     | gameid = gameid
+                                     , gs = gameState
+                                     , names = names
+                                 }
+                             UpdateRsp { gameState } ->
+                                 let gs = if model.isRemote then
+                                              Board.addAnalysis gameState
+                                          else
+                                              gameState
+                                 in
+                                     { mod | gs = gs }
+                             GamesRsp games ->
+                                 mod
+                             ErrorRsp { request, text } ->
+                                 { mod | message = Just text }
+                             ChatRsp { gameid, player, text } ->
+                                 -- TODO
+                                 mod
+                             _ ->
+                                 mod
+                in
+                    (m2, Cmd.none)
 
 setupEmptyBoardClick : WhichBoard -> Node -> Model -> (Model, Cmd Msg)
 setupEmptyBoardClick which node model =
