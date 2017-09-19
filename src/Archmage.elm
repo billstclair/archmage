@@ -230,17 +230,19 @@ updateInternal msg model =
         NodeClick kind which node ->
             case kind of
                 SetupBoardClick ->
-                    ( { model
-                          | nodeSelections = [ (placementSelectionColor, node.name) ]
-                      }
-                    , Cmd.none
+                    ( model
+                    , send model.server
+                        <| SelectPlacementReq { gameid = model.gameid
+                                              , node = node.name
+                                              }
                     )
                 EmptyBoardClick ->
-                    case model.gs.mode of
-                        SetupMode ->
-                            setupEmptyBoardClick which node model
-                        _ ->
-                            (model, Cmd.none)
+                    ( model
+                    , send model.server
+                        <| PlaceReq { gameid = model.gameid
+                                    , node = node.name
+                                    }
+                    )
                 OtherPlayerClick ->
                     ( let gs = model.gs
                           gs2 = { gs
@@ -410,6 +412,63 @@ printMessage message =
         _ ->
             encodeMessage message
 
+calculateSelections : GameState -> List NodeSelection
+calculateSelections gs =
+    let moves = gs.analysis.moves
+    in
+        case gs.mode of
+            SetupMode ->
+                case gs.subject of
+                    Nothing ->
+                        []
+                    Just node ->
+                        [ (placementSelectionColor, node.name) ]
+            ChooseActorMode ->
+                List.map (\actor -> (actorSelectionColor, actor))
+                         <| Dict.keys moves
+            ChooseSubjectMode ->
+                case gs.actor of
+                    Nothing ->
+                        []
+                    Just {name} ->
+                        case Dict.get name moves of
+                            Nothing ->
+                                []
+                            Just actorMoves ->
+                                (actorSelectionColor, name) ::
+                                (List.map
+                                     (\{subject} ->
+                                         (subjectSelectionColor, subject.name)
+                                     )
+                                     actorMoves
+                                )
+            ChooseTargetMode ->
+                case gs.actor of
+                    Nothing ->
+                        []
+                    Just actor ->
+                        case Dict.get actor.name moves of
+                            Nothing ->
+                                []
+                            Just actorMoves ->
+                                case gs.subject of
+                                    Nothing ->
+                                        []
+                                    Just {name} ->
+                                        (actorSelectionColor, actor.name) ::
+                                        (subjectSelectionColor, name) ::
+                                        (List.map
+                                             (\{target} ->
+                                                  (targetSelectionColor, target.name)
+                                             )
+                                             (List.filter
+                                                  (\move -> name == move.subject.name)
+                                                  actorMoves
+                                             )
+                                        )
+            _ ->
+                []
+
 serverMessage : ServerInterface Msg -> Message -> Model -> (Model, Cmd Msg)
 serverMessage si message model =
     let mod = { model | server = si }
@@ -440,7 +499,10 @@ serverMessage si message model =
                                           else
                                               gameState
                                  in
-                                     { mod | gs = gs }
+                                     { mod
+                                         | gs = gs
+                                         , nodeSelections = calculateSelections gs
+                                     }
                              GamesRsp games ->
                                  mod
                              ErrorRsp { request, text } ->
@@ -642,7 +704,7 @@ nodeMsg model board node =
                                 BlackPlayer -> BottomList
                 in
                     if board == gs.board then
-                        if node.piece == Nothing && model.nodeSelections /= [] then
+                        if node.piece == Nothing && gs.subject /= Nothing then
                             Just <| NodeClick EmptyBoardClick which node
                         else
                             Nothing

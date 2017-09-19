@@ -350,21 +350,20 @@ placeReq state node =
                     Err <| "No such board node: " ++ node
                 else
                     let list = Types.setBoardPiece name Nothing <| playerList state
-                        timeToPlay = (state.player == BlackPlayer) &&
-                                     (Dict.isEmpty list.nodes)
                         gs = { state
                                  | board = Types.setBoardPiece node piece board
                              }
+                        gs2 = setPlayerList list gs
+                        gs3 = { gs2 | player = Types.otherPlayer gs.player }
+                        gs4 = { gs3 | subject = initialPlacementSubject gs3 }
                     in
-                        if not timeToPlay then
-                            let gs2 = { gs | player = Types.otherPlayer gs.player }
-                            in
-                                Ok <| setPlayerList list
-                                    { gs2 | subject = initialPlacementSubject gs2 }
+                        if gs4.subject /= Nothing then
+                            Ok gs4
                         else
                             Ok <| Board.addAnalysis
-                                { gs
-                                    | topList = Board.initialCaptureBoard
+                                { gs4
+                                    | mode = ChooseActorMode
+                                    , topList = Board.initialCaptureBoard
                                     , bottomList = Board.initialCaptureBoard
                                     , history = [boardToString gs.board]
                                     , player = WhitePlayer
