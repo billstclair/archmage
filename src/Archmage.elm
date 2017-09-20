@@ -105,19 +105,35 @@ setMessage model =
                 let c = case gs.player of
                             WhitePlayer -> "White, "
                             BlackPlayer -> "Black, "
-                    msg2 = if gs.mode == ChooseActorMode
-                             && Dict.isEmpty gs.analysis.moves
+                    analysis = gs.analysis
+                    msg2 = if analysis.noNonKoMoves then
+                               if analysis.otherNoNonKoMoves then
+                                   "Every sequence of moves ends in Ko for both players. Undo."
+                               else
+                                   let suffix = if gs.isFirstMove then
+                                                    "Click \"End Turn\"."
+                                                else
+                                                    "Undo or click \"End Turn\"."
+                                   in
+                                       "Every sequence of moves end in Ko. " ++ suffix
+                           else if gs.mode == ChooseActorMode
+                                   && Dict.isEmpty analysis.moves
                            then
-                               if gs.analysis.isKo then
-                                   "you're in Ko and no moves are possible. Undo."
+                               if analysis.otherNoNonKoMoves then
+                                   "the other player has no non-Ko moves. Undo."
                                else if gs.isFirstMove then
                                    "no moves are possible. Click \"End Turn\"."
+                               else if analysis.isKo then
+                                   "you're in Ko and no moves are possible. Undo."
                                else
                                    "no moves are possible. Undo or click \"End Turn\"."
                            else
                                message
                     msg = if gs.mode == GameOverMode then
-                              message
+                              if analysis.noNonKoMoves && analysis.otherNoNonKoMoves then
+                                  "Game Over! Every sequence of moves ends in Ko for both players."
+                              else
+                                  message
                           else
                               c ++ msg2
                 in
@@ -136,6 +152,10 @@ initialPlacementSelections player model =
         of
             Nothing -> []
             Just node -> [ (placementSelectionColor, node.name) ]
+
+pieceSize : Int
+pieceSize =
+    100
 
 init : ( Model, Cmd Msg )
 init =
@@ -161,13 +181,6 @@ init =
                       , restoreState = Nothing
                       }
         )
-
-whichBoard : WhichBoard -> Model -> Board
-whichBoard which model =
-    case which of
-        TopList -> model.gs.topList
-        BottomList -> model.gs.bottomList
-        MainBoard -> model.gs.board
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -209,13 +222,10 @@ updateInternal msg model =
             , Cmd.none
             )
         Undo ->
-            case model.gs.undoState of
-                Just (TheGameState gs) ->
-                    ( findValidMoves False { model | gs = Board.addAnalysis gs }
-                    , Cmd.none
-                    )
-                _ ->
-                    ( model, Cmd.none )
+            ( model
+            , send model.server
+                <| UndoReq { gameid = model.gameid }
+            )
         NodeClick kind which node ->
             case kind of
                 SetupBoardClick ->
@@ -233,135 +243,34 @@ updateInternal msg model =
                                     }
                     )
                 OtherPlayerClick ->
-                    ( let gs = model.gs
-                          gs2 = { gs
-                                    | player = otherPlayer gs.player
-                                    , isFirstMove = True
-                                    , mode = ChooseActorMode
-                                    , undoState = Nothing
-                                    , history = Board.boardToString gs.board
-                                                :: gs.history
-                                }
-                      in
-                          findValidMoves
-                              True { model | gs = Board.addAnalysis gs2 }
-                    , Cmd.none
+                    ( model
+                    , send model.server
+                        <| EndTurnReq { gameid = model.gameid }
                     )
                 ChooseActorClick ->
-                    let subjectSelections =
-                            case Dict.get node.name model.gs.analysis.moves of
-                                Nothing ->
-                                    []
-                                Just moves ->
-                                    List.map (\move ->
-                                                  ( subjectSelectionColor
-                                                  , move.subject.name
-                                                  )
-                                             )
-                                        moves
-                        gs = model.gs
-                        gs2 = { gs
-                                  | mode = ChooseSubjectMode
-                                  , actor = Just node
-                              }
-                    in
-                        ( { model
-                              | gs = gs2
-                              , nodeSelections =
-                                (actorSelectionColor, node.name) :: subjectSelections
-                          }
-                        , Cmd.none
-                        )
-                UnchooseActorClick ->
-                    let gs = model.gs
-                    in
-                        ( findValidMoves
-                              False
-                              { model
-                                  | gs = { gs | mode = ChooseActorMode 
-                                         , subject = Nothing
-                                         }
-                              }
-                        , Cmd.none
-                        )
+                    ( model
+                    , send model.server
+                        <| SelectActorReq { gameid = model.gameid
+                                          , node = node.name
+                                          }
+                    )
                 ChooseSubjectClick ->
-                    let actorName = case model.gs.actor of
-                                        Just actor ->
-                                            actor.name
-                                        Nothing ->
-                                            "H0" --can't happen
-                        targetSelections =
-                            case Dict.get actorName model.gs.analysis.moves of
-                                Nothing ->
-                                    []
-                                Just moves ->
-                                    let targetMoves =
-                                            List.filter
-                                                (\move -> move.subject == node)
-                                                moves
-                                    in
-                                        List.map (\move ->
-                                                      ( targetSelectionColor
-                                                      , move.target.name
-                                                      )
-                                                 )
-                                            targetMoves
-                        gs = model.gs
-                        gs2 = { gs
-                                  | mode = ChooseTargetMode
-                                  , subject = Just node
-                              }
-                    in
-                        ( { model
-                              | gs = gs2
-                              , nodeSelections =
-                                List.append
-                                    [ (actorSelectionColor, actorName)
-                                    , (subjectSelectionColor, node.name)
-                                    ]
-                                    targetSelections
-                          }
-                        , Cmd.none
-                        )
-                UnchooseSubjectClick ->
-                    case model.gs.actor of
-                        Nothing ->
-                            (model, Cmd.none) --can't happen
-                        Just actor ->
-                            let gs = model.gs
-                                gs2 = { gs | mode = ChooseActorMode }
-                            in
-                                update (NodeClick ChooseActorClick MainBoard actor)
-                                    { model | gs = gs2 }
+                    ( model
+                    , send model.server
+                        <| SelectSubjectReq { gameid = model.gameid
+                                            , node = node.name
+                                            }
+                    )
                 ChooseTargetClick ->
-                    ( findValidMoves
-                          False
-                          { model
-                              | gs = makeMove node.name model.gs
-                          }
-                    , Cmd.none
+                    ( model
+                    , send model.server
+                        <| MoveReq { gameid = model.gameid
+                                   , node = node.name
+                                   }
                     )
         _ ->
             ( model, Cmd.none )
 
-emptyBoard : Board
-emptyBoard =
-    { rows = 0
-    , cols = 0
-    , nodes = Dict.empty
-    }
-
-stripGameState : GameState -> GameState
-stripGameState gs =
-    { gs
-        | topList = emptyBoard
-        , bottomList = emptyBoard
-        , board = emptyBoard
-        , history = []
-        , undoState = Nothing
-        , analysis = Types.emptyAnalysis
-    }
-    
 coloredPieceToString : ColoredPiece -> String
 coloredPieceToString piece =
     (String.fromChar <| pieceToChar (Just piece))
@@ -505,165 +414,6 @@ serverMessage si message model =
                 in
                     (m2, Cmd.none)
 
-setupEmptyBoardClick : WhichBoard -> Node -> Model -> (Model, Cmd Msg)
-setupEmptyBoardClick which node model =
-    case model.nodeSelections of
-        [] ->
-            (model, Cmd.none)
-        (_, sn) :: _ ->
-            let board = whichBoard which model
-                gs = model.gs
-                gs2 = case which of
-                          TopList ->
-                              { gs
-                                  | topList =
-                                    setBoardPiece
-                                    sn Nothing board
-                              }
-                          BottomList ->
-                              { gs
-                                  | bottomList =
-                                    setBoardPiece
-                                    sn Nothing board
-                              }
-                          _ ->
-                              gs
-                player = case which of
-                             TopList -> BlackPlayer
-                             BottomList -> WhitePlayer
-                             _ -> gs2.player
-                selections = initialPlacementSelections player model
-                list = case which of
-                           TopList -> model.gs.topList
-                           _ -> model.gs.bottomList
-                piece = case getNode sn list of
-                            Nothing -> Nothing
-                            Just n -> n.piece
-                gs3 = { gs2
-                          | board =
-                               setBoardPiece node.name piece gs2.board
-                           , player = player
-                           , mode = if selections == [] then
-                                        ChooseActorMode
-                                    else
-                                        SetupMode
-                      }
-                mod2 = { model
-                           | nodeSelections = selections
-                           , gs = gs3
-                       }
-                mod3 = if gs3.mode == SetupMode then
-                           mod2
-                       else
-                           findValidMoves
-                               True
-                               { mod2
-                                   | gs = Board.addAnalysis
-                                          { gs3
-                                              | topList = Board.initialCaptureBoard
-                                              , bottomList = Board.initialCaptureBoard
-                                              , history = [boardToString gs3.board]
-                                          }
-                               }
-            in
-                ( mod3 , Cmd.none )
-
-
-checkForNonKo : Model -> (Model, Bool)
-checkForNonKo model =
-    let gs = model.gs
-        analysis = gs.analysis
-        firstMove = gs.isFirstMove
-    in
-        if not analysis.noNonKoMoves then
-            (model, False)
-        else if not firstMove || not analysis.otherNoNonKoMoves then
-            let suffix = if firstMove then
-                             "Click \"End Turn\"."
-                         else
-                             "Undo or click \"End Turn\"."
-                msg = "Every sequence of moves ends in Ko. " ++ suffix
-            in
-                ( { model
-                      | message = Just msg
-                      , nodeSelections = []
-                  }
-                , True
-                )
-        else
-            ( { model
-                  | nodeSelections = []
-                  , message = Just "Game Over! Every sequence of moves ends in Ko for both players."
-              }
-            , True
-            )
-            
-findValidMoves : Bool -> Model -> Model
-findValidMoves gameOverIfNone model =
-    let gs = model.gs
-        analysis = gs.analysis
-        moves = analysis.moves
-        mod = { model | nodeSelections = [] }
-        (mod2, done) = if Dict.isEmpty moves then
-                           (mod, False)
-                       else
-                           checkForNonKo mod
-    in
-        if done then
-            mod2
-        else
-            case highlightActors moves mod2 of
-                Just m ->
-                    m
-                Nothing ->
-                    if not gameOverIfNone then
-                        mod2
-                    else
-                        let player = otherPlayer gs.player
-                            otherMoves =
-                                Board.validMoves (playerColor player) gs.board
-                        in
-                            if Dict.isEmpty otherMoves then
-                                { mod2 | gs = { gs | mode = GameOverMode } }
-                            else
-                                mod2
-
-highlightActors : MovesDict -> Model -> Maybe Model
-highlightActors moves model =
-    case Dict.keys moves of
-        [] ->
-            Nothing
-        keys ->
-            Just { model
-                     | nodeSelections =
-                         List.concat
-                             [ List.map (\key -> (actorSelectionColor, key)) keys
-                             , if model.gs.isFirstMove then
-                                   []
-                               else
-                                   [(otherPlayerSelectionColor, centerHoleName)]
-                             ]
-                 }
-
-pieceSize : Int
-pieceSize =
-    100
-
-pieceCount : Int
-pieceCount =
-    7
-
-pieces : List Piece
-pieces =
-    [ HandPiece
-    , CupPiece
-    , SwordPiece
-    , WandPiece
-    , TowerPiece
-    , MoonPiece
-    , MagePiece
-    ]
-
 br : Html Msg
 br =
     Html.br [][]
@@ -735,7 +485,7 @@ nodeMsg model board node =
                                 Nothing
                             Just (color, _) ->
                                 if color == actorSelectionColor then
-                                    Just <| NodeClick UnchooseActorClick MainBoard node
+                                    Just <| NodeClick ChooseActorClick MainBoard node
                                 else if color == subjectSelectionColor then
                                     Just <| NodeClick ChooseSubjectClick MainBoard node
                                 else
@@ -746,9 +496,9 @@ nodeMsg model board node =
                         Nothing
                     Just (color, _) ->
                         if color == actorSelectionColor then
-                            Just <| NodeClick UnchooseActorClick MainBoard node
+                            Just <| NodeClick ChooseActorClick MainBoard node
                         else if color == subjectSelectionColor then
-                            Just <| NodeClick UnchooseSubjectClick MainBoard node
+                            Just <| NodeClick ChooseSubjectClick MainBoard node
                         else
                             Just <| NodeClick ChooseTargetClick MainBoard node
 

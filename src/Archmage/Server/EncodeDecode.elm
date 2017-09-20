@@ -82,12 +82,36 @@ gameStateDecoder =
                          (andThenSucceed (JD.nullable nodeDecoder) actor)
                          (andThenSucceed (JD.nullable nodeDecoder) subject)
                          (andThenSucceed boardsDecoder boards)
-                         (andThenSucceed (JD.list JD.string) history)
+                         (andThenSucceed historyDecoder history)
                          (andThenSucceed (JD.nullable theGameStateDecoder) undoState)
                  _ ->
                      JD.fail "Other than 8 elements in GameState list."
         )
         (JD.list JD.value)
+
+isValidGameboardString : String -> Bool
+isValidGameboardString string =
+    49 == (List.length <| Board.runLengthDecode (String.toList string))
+
+historyDecoder : Decoder (List String)
+historyDecoder =
+    JD.andThen
+        (\histories ->
+             let loop = (\hs ->
+                             case hs of
+                                 [] ->
+                                     JD.succeed histories
+                                 h :: tail ->
+                                     if isValidGameboardString h then
+                                         loop tail
+                                     else
+                                         JD.fail
+                                             <| "Not a valid game board string: " ++ h
+                        )
+             in
+                 loop histories
+        )
+        (JD.list JD.string)
 
 playerDecoder : Decoder Player
 playerDecoder =
@@ -197,21 +221,31 @@ publicGameDecoder =
         )
         (JD.list JD.string)
 
+isValidGameBoard : Board -> Bool
+isValidGameBoard board =
+    board.rows == 7 && board.cols == 7
+
+areValidTopAndBottomBoards : Board -> Board -> Bool
+areValidTopAndBottomBoards top bottom =
+    top.rows == 1 && bottom.rows == 1 &&
+    (top.cols == 7 || top.cols == 13) &&
+    top.cols == bottom.cols
+
 boardsDecoder : Decoder Boards
 boardsDecoder =
     JD.andThen
         (\list ->
              case List.map stringToBoard list of
                  [b, tl, bl] ->
-                     JD.succeed <| Boards b tl bl
+                     if isValidGameBoard b &&
+                         areValidTopAndBottomBoards tl bl then
+                         JD.succeed <| Boards b tl bl
+                     else
+                         JD.fail "Wrong board sizes."
                  _ ->
                      JD.fail "Wrong number of boards."
         )
         (JD.list JD.string)
-
-boardDecoder : Decoder Board
-boardDecoder =
-    JD.map stringToBoard JD.string
 
 theGameStateDecoder : Decoder TheGameState
 theGameStateDecoder =

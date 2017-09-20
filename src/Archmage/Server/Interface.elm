@@ -264,8 +264,9 @@ doGamePlay state message gameid modes playFun =
             case playFun gameState of
                 Err msg ->
                     ( state, errorRsp message msg )
-                Ok gs ->
-                    let message = UpdateRsp { gameid = gameid
+                Ok gameState ->
+                    let gs = Board.addAnalysis gameState
+                        message = UpdateRsp { gameid = gameid
                                             , gameState = gs
                                             }
                     in
@@ -296,14 +297,19 @@ joinReq : ServerState -> GameState -> Message -> String -> String -> (ServerStat
 joinReq state gameState message gameid name =
     let names = state.names
         nms = { names | black = name }
+        mode = joinMode gameState
         gs = Board.addAnalysis
              { gameState
-                 | mode = joinMode gameState
-                 , subject = case gameState.subject of
-                                 Nothing ->
-                                     initialPlacementSubject gameState
-                                 ms ->
-                                     ms
+                 | mode = mode
+                 , actor = Nothing
+                 , subject = if mode == SetupMode then
+                                 case gameState.subject of
+                                     Nothing ->
+                                         initialPlacementSubject gameState
+                                     maybeSubject ->
+                                         maybeSubject
+                             else
+                                 Nothing
              }
         msg = JoinRsp { gameid = gameid
                       , names = nms
@@ -390,7 +396,8 @@ selectActorReq state node =
         Just actor ->
             if actor.name == node then
                 Ok { state
-                       | actor = Nothing
+                       | mode = ChooseActorMode
+                       , actor = Nothing
                        , subject = Nothing
                    }
             else
@@ -417,7 +424,10 @@ selectActorInternal state node =
                         if color /= Types.playerColor state.player then
                             Err <| "Attempt to select other player's piece as actor."
                         else
-                            Ok { state | actor = Just n }
+                            Ok { state
+                                   | mode = ChooseSubjectMode
+                                   , actor = Just n
+                               }
 
 -- Click on a selected subject after choosing an actor in game play.
 -- Store its node in GameState.subject
@@ -426,7 +436,10 @@ selectSubjectReq state node =
     case state.subject of
         Just subject ->
             if subject.name == node then
-                Ok { state | subject = Nothing }
+                Ok { state
+                       | mode = ChooseSubjectMode
+                       , subject = Nothing
+                   }
             else
                 Err <| "There's already a subject selected."
         Nothing ->
@@ -457,7 +470,10 @@ selectSubjectInternal state node =
                     Nothing ->
                         Err <| "Board has no piece at: " ++ node
                     Just (color, p) ->
-                        Ok { state | subject = Just n }
+                        Ok { state
+                               | mode = ChooseTargetMode
+                               , subject = Just n
+                           }
 
 -- Click on a selected empty target square after selecting an actor and subject.
 -- Do the move, updating GameState.board accordingly,

@@ -15,7 +15,7 @@ module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, ren
                                , initialCaptureBoard
                                , centerHoleName, centerHolePiece, centerHoleNode
                                , getNode, setNode
-                               , stringToBoard, boardToString
+                               , stringToBoard, boardToString, runLengthDecode
                                , pieceToChar, charToPiece
                                , horizontalNeighbors, diagonalNeighbors
                                , allHorizontalNeighbors, allDiagonalNeighbors
