@@ -281,17 +281,29 @@ initialPlacementSubject gs =
                     WhitePlayer -> gs.topList
                     BlackPlayer -> gs.bottomList
         nodes = Dict.values board.nodes
-                |> List.sortBy .column
+              |> List.sortBy .column
     in
         LE.find (\node -> node.piece /= Nothing) nodes
+
+joinMode : GameState -> Mode
+joinMode gameState =
+    if Board.isSetupBoard gameState.topList then
+        SetupMode
+    else
+        ChooseActorMode
 
 joinReq : ServerState -> GameState -> Message -> String -> String -> (ServerState, Message)
 joinReq state gameState message gameid name =
     let names = state.names
         nms = { names | black = name }
-        gs = { gameState
-                 | mode = SetupMode
-                 , subject = initialPlacementSubject gameState
+        gs = Board.addAnalysis
+             { gameState
+                 | mode = joinMode gameState
+                 , subject = case gameState.subject of
+                                 Nothing ->
+                                     initialPlacementSubject gameState
+                                 ms ->
+                                     ms
              }
         msg = JoinRsp { gameid = gameid
                       , names = nms

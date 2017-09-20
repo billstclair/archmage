@@ -11,7 +11,7 @@
 
 module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, render
                                , isEmptyBoard, isPlayMode, addAnalysis
-                               , whiteSetupBoard, blackSetupBoard
+                               , whiteSetupBoard, blackSetupBoard, isSetupBoard
                                , initialCaptureBoard
                                , centerHoleName, centerHolePiece, centerHoleNode
                                , getNode, setNode
@@ -178,6 +178,10 @@ whiteSetupBoard =
 blackSetupBoard : Board
 blackSetupBoard =
     makeSetupBoard Black
+
+isSetupBoard : Board -> Bool
+isSetupBoard board =
+    board.rows == 1 && board.cols == 7
 
 captureList : List (String, Int)
 captureList =

@@ -29,7 +29,7 @@ import Archmage.Board as Board exposing ( initialGameState, getNode, printMove
                                         , pieceToChar
                                         )
 import Archmage.Server.EncodeDecode
-    exposing ( encodeGameState, restoreGame
+    exposing ( encodeGameState, decodeGameState, restoreGame
              , encodeMessage, decodeMessage
              )
 import Archmage.Server.Interface exposing ( makeProxyServer, makeServer, send )
@@ -191,29 +191,18 @@ updateInternal msg model =
             , Cmd.none
             )
         RestoreGame ->
-            case restoreGame model.restoreState of
-                Ok gs ->
-                    let gs2 = { gs | mode = if isPlayMode gs.mode then
-                                                ChooseActorMode
-                                            else
-                                                gs.mode
-                                    , actor = Nothing
-                                    , subject = Nothing
-                              }
-                        mod = { model | gs = gs2 }
-                    in
-                        ( if isPlayMode gs2.mode then
-                              findValidMoves True mod
-                          else
-                              { mod |
-                                    nodeSelections =
-                                        initialPlacementSelections gs.player mod
-                              }
-                        , Cmd.none
-                        )
-                Err _ ->
-                    ( { model | message = Just "Invalid game state." }
+            case decodeGameState model.restoreState of
+                Err msg ->
+                    ( { model | message = Just msg }
                     , Cmd.none
+                    )
+                Ok gs ->
+                    ( model
+                    , send model.server
+                        <| NewReq { name = model.names.white
+                                  , isPublic = False
+                                  , restoreState = Just gs
+                                  }
                     )
         SetPage page ->
             ( { model | page = page }
@@ -492,6 +481,7 @@ serverMessage si message model =
                                      | gameid = gameid
                                      , gs = gameState
                                      , names = names
+                                     , nodeSelections = calculateSelections gameState
                                  }
                              UpdateRsp { gameState } ->
                                  let gs = if model.isRemote then
@@ -908,10 +898,13 @@ view model =
                     , if emptyBoard then
                           title "Enter a saved game to restore it."
                       else
-                          let gs2 = { gs
+                          let gs2 = if gs.mode == SetupMode then
+                                        gs
+                                    else
+                                        { gs
                                         | actor = Nothing
                                         , subject = Nothing
-                                    }
+                                        }
                           in
                               value <| encodeGameState gs2
                     ]
