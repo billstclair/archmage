@@ -2,6 +2,7 @@
 --
 -- Archmage.elm
 -- Chris St. Clair's Archmage board game.
+-- The distributed version uses ArchmagePorts.elm as top-level entry point.
 -- Copyright (c) 2017 Bill St. Clair <billstclair@gmail.com>
 -- Some rights reserved.
 -- Distributed under the MIT License
@@ -9,10 +10,11 @@
 --
 ----------------------------------------------------------------------
 
-module Archmage exposing (..)
+module Archmage exposing ( init, view, update, subscriptions )
 
 import Archmage.Types as Types
-    exposing ( GameState, TheGameState(..), Piece(..), Color(..), Player(..)
+    exposing ( Model
+             , GameState, TheGameState(..), Piece(..), Color(..), Player(..)
              , ColoredPiece, Board, Node
              , NodeSelection, RenderInfo
              , Page(..), Msg(..), Mode(..), ClickKind(..), WhichBoard(..)
@@ -64,11 +66,15 @@ type alias Model =
 
 main =
     Html.program
-        { init = init
+        { init = init Nothing
         , view = view
         , update = update
-        , subscriptions = (\m -> Sub.none)
+        , subscriptions = subscriptions
         }
+
+subscriptions: Model -> Sub Msg
+subscriptions model =
+    Sub.none
 
 {-
 
@@ -157,22 +163,31 @@ pieceSize : Int
 pieceSize =
     100
 
-init : ( Model, Cmd Msg )
-init =
-    let mod = { page = GamePage
-              , nodeSelections = []
-              , renderInfo = Board.renderInfo pieceSize
-              , message = Nothing
-              , restoreState = ""
-              , gs = initialGameState False
-              , isRemote = False
-              , server = makeProxyServer ServerMessage
-              , gameid = ""
-              , names = initialPlayerNames
-              }
-        model = { mod
-                    | nodeSelections = initialPlacementSelections mod.gs.player mod
-                }
+init : Maybe Model -> ( Model, Cmd Msg )
+init maybeModel =
+    let (model, restoreState)
+        = case maybeModel of
+              Just mod ->
+                  (mod, Just mod.gs)
+              Nothing ->
+                  let mod = { page = GamePage
+                            , nodeSelections = []
+                            , renderInfo = Board.renderInfo pieceSize
+                            , message = Nothing
+                            , restoreState = ""
+                            , gs = initialGameState False
+                            , isRemote = False
+                            , server = makeProxyServer ServerMessage
+                            , gameid = ""
+                            , names = initialPlayerNames
+                            }
+                  in
+                      ( { mod
+                            | nodeSelections
+                                = initialPlacementSelections mod.gs.player mod
+                        }
+                      , Nothing
+                      )
     in
         ( model
         , send model.server
@@ -196,7 +211,7 @@ updateInternal : Msg -> Model -> ( Model, Cmd Msg )
 updateInternal msg model =
     case msg of
         NewGame ->
-            init
+            init Nothing
         ServerMessage si message ->
             serverMessage si message model
         SetRestoreState text ->
