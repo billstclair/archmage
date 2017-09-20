@@ -32,6 +32,7 @@ import Dict exposing ( Dict )
 import Time exposing ( Time )
 import Http
 import Bitwise
+import Window
 
 type Page
     = GamePage
@@ -77,6 +78,7 @@ type Msg
     | RefreshPublicGames
     | Undo
     | Tick Time
+    | WindowSize Window.Size
     | Noop
 
 type Piece
@@ -174,6 +176,7 @@ emptyAnalysis =
 
 type alias Model =
     { page : Page
+    , windowSize : Maybe Window.Size
     , nodeSelections : List NodeSelection
     , renderInfo : RenderInfo
     , message : Maybe String

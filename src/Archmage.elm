@@ -40,29 +40,15 @@ import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span
                      , input
                      )
 import Html.Attributes exposing ( align, src, href, target, style, disabled, title
-                                , type_, size, value
+                                , type_, size, value, width
                                 )
 import Html.Events exposing ( onClick, onInput )
-import Svg exposing ( Svg, svg, g, rect )
-import Svg.Attributes exposing ( x, y, width, height, stroke, strokeWidth, fillOpacity )
 import Char
 import Dict exposing ( Dict )
 import List.Extra as LE
 import Task
+import Window
 import Debug exposing ( log )
-
-type alias Model =
-    { page : Page
-    , nodeSelections : List NodeSelection
-    , renderInfo : RenderInfo
-    , message : Maybe String
-    , restoreState : String
-    , gs : GameState
-    , isRemote : Bool
-    , server : ServerInterface Msg
-    , gameid : String
-    , names : PlayerNames
-    }
 
 main =
     Html.program
@@ -74,7 +60,7 @@ main =
 
 subscriptions: Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    Window.resizes WindowSize
 
 {-
 
@@ -92,11 +78,11 @@ messages : List (Mode, String)
 messages =
     [ (SetupMode, "select and place a piece.")
     , (ChooseActorMode, "click a " ++ actorSelectionColor
-           ++ "-highighted actor.")
+           ++ " actor.")
     , (ChooseSubjectMode, "click a " ++ subjectSelectionColor
-           ++ "-highlighted subject or the actor.")
+           ++ " subject or the actor.")
     , (ChooseTargetMode, "click a " ++ targetSelectionColor
-           ++ "-highlighted target, the subject, or the actor.")
+           ++ " target, subject, or actor.")
     , (GameOverMode, "Game Over!")
     ]
 
@@ -114,30 +100,30 @@ setMessage model =
                     analysis = gs.analysis
                     msg2 = if analysis.noNonKoMoves then
                                if analysis.otherNoNonKoMoves then
-                                   "Every sequence of moves ends in Ko for both players. Undo."
+                                   "Ends in Ko for both players. Undo."
                                else
                                    let suffix = if gs.isFirstMove then
                                                     "Click \"End Turn\"."
                                                 else
-                                                    "Undo or click \"End Turn\"."
+                                                    "Undo or End Turn."
                                    in
-                                       "Every sequence of moves end in Ko. " ++ suffix
+                                       "Ends in Ko. " ++ suffix
                            else if gs.mode == ChooseActorMode
                                    && Dict.isEmpty analysis.moves
                            then
                                if analysis.otherNoNonKoMoves then
-                                   "the other player has no non-Ko moves. Undo."
+                                   "other player has no non-Ko moves. Undo."
                                else if gs.isFirstMove then
                                    "no moves are possible. Click \"End Turn\"."
                                else if analysis.isKo then
-                                   "you're in Ko and no moves are possible. Undo."
+                                   "in Ko and no moves possible. Undo."
                                else
-                                   "no moves are possible. Undo or click \"End Turn\"."
+                                   "no moves possible. Undo or End Turn."
                            else
                                message
                     msg = if gs.mode == GameOverMode then
                               if analysis.noNonKoMoves && analysis.otherNoNonKoMoves then
-                                  "Game Over! Every sequence of moves ends in Ko for both players."
+                                  "Game Over! Ends in Ko for both players."
                               else
                                   message
                           else
@@ -180,6 +166,7 @@ init maybeModel =
                             , server = makeProxyServer ServerMessage
                             , gameid = ""
                             , names = initialPlayerNames
+                            , windowSize = Nothing
                             }
                   in
                       ( { mod
@@ -190,12 +177,19 @@ init maybeModel =
                       )
     in
         ( model
-        , send model.server
-            <| NewReq { name = model.names.white
-                      , isPublic = False
-                      , restoreState = Nothing
-                      }
+        , Cmd.batch
+            [ send model.server
+                  <| NewReq { name = model.names.white
+                            , isPublic = False
+                            , restoreState = restoreState
+                            }
+            , windowSizeCmd
+            ]
         )
+
+windowSizeCmd : Cmd Msg
+windowSizeCmd =
+    Task.perform (\x -> WindowSize x) Window.size
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -283,8 +277,30 @@ updateInternal msg model =
                                    , node = node.name
                                    }
                     )
+        WindowSize size ->
+            ( { model
+                  | windowSize = Just size
+                  , renderInfo = Board.renderInfo <| windowSizeToPieceSize size
+              }
+            , Cmd.none
+            )
         _ ->
             ( model, Cmd.none )
+
+-- height = size * 8 * 1.5
+windowHeightToPieceSize : Int -> Int
+windowHeightToPieceSize height =
+    (height * 2) // 24
+    
+-- width = (size * 7) * 1.1
+windowWidthToPieceSize : Int -> Int
+windowWidthToPieceSize width =
+    (width * 10) // 77
+
+windowSizeToPieceSize : Window.Size -> Int
+windowSizeToPieceSize size =
+    min (windowHeightToPieceSize size.height)
+        (windowWidthToPieceSize size.width)
 
 coloredPieceToString : ColoredPiece -> String
 coloredPieceToString piece =
