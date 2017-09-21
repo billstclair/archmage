@@ -52,27 +52,31 @@ modelDecoder =
     JD.map8 makeSavedModel
         (JD.field "page" pageDecoder)
         (JD.field "gameid" JD.string)
-        (JD.field "isRemote" JD.bool)
+        (JD.field "remoteType" JD.string)
         (JD.field "names" playerNamesDecoder)
         (JD.field "nodeSelections" (JD.list nodeSelectionDecoder))
         (JD.field "message" (JD.nullable JD.string))
         (JD.field  "gs" gameStateDecoder)
         (JD.field "server" serverInterfaceDecoder)
 
-makeSavedModel : Page -> String -> Bool -> PlayerNames -> List NodeSelection -> Maybe String -> GameState -> ServerInterface Msg -> Model
-makeSavedModel page gameid isRemote names nodeSelections message gs server =
-    { page = page
-    , nodeSelections = nodeSelections
-    , message = message
-    , gs = gs
-    , isRemote = isRemote
-    , server = server
-    , gameid = gameid
-    , names = names
-    , restoreState = ""
-    , windowSize = Nothing
-    , renderInfo = Nothing
-    }
+makeSavedModel : Page -> String -> String -> PlayerNames -> List NodeSelection -> Maybe String -> GameState -> ServerInterface Msg -> Model
+makeSavedModel page gameid remoteType names nodeSelections message gs server =
+    let (isRemote, isPublic) = parseRemoteType remoteType
+    in
+        { page = page
+        , nodeSelections = nodeSelections
+        , message = message
+        , gs = gs
+        , isRemote = isRemote
+        , isPublic = isPublic
+        , server = server
+        , gameid = gameid
+        , names = names
+        , restoreState = ""
+        , windowSize = Nothing
+        , renderInfo = Nothing
+        , newIsRemote = isRemote
+        }
 
 makePage : String -> Decoder Page
 makePage string =
@@ -645,7 +649,10 @@ modelEncoder model =
     JE.object
         [ ("page", pageEncoder model.page)
         , ("gameid", JE.string model.gameid)
-        , ("isRemote", JE.bool model.isRemote)
+        , ("remoteType"
+          , JE.string
+              <| encodeRemoteType model.isRemote model.isPublic
+          )
         , ("names", playerNamesEncoder model.names)
         , ("nodeSelections"
           , JE.list
@@ -1035,3 +1042,20 @@ maybePublicGames string =
                     Just games
                 Err _ ->
                     Nothing
+
+parseRemoteType : String -> (Bool, Bool)
+parseRemoteType string =
+    case string of
+        "R" -> (True, False)
+        "P" -> (True, True)
+        _ -> (False, False)
+
+encodeRemoteType : Bool -> Bool -> String
+encodeRemoteType isRemote isPublic =
+    if isRemote then
+        if isPublic then
+            "P"
+        else
+            "R"
+    else
+        "L"

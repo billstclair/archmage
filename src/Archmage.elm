@@ -34,20 +34,22 @@ import Archmage.Server.EncodeDecode
     exposing ( encodeGameState, decodeGameState, restoreGame
              , encodeMessage, decodeMessage
              )
-import Archmage.Server.Interface exposing ( makeProxyServer, makeServer, send )
+import Archmage.Server.Interface as Interface
+    exposing ( makeProxyServer, makeServer, send )
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span
                      , input
                      )
 import Html.Attributes exposing ( align, src, href, target, style, disabled, title
-                                , type_, size, value, width
+                                , type_, size, value, width, checked
                                 )
-import Html.Events exposing ( onClick, onInput )
+import Html.Events exposing ( onClick, onInput, onCheck )
 import Char
 import Dict exposing ( Dict )
 import List.Extra as LE
 import Task
 import Window
+import WebSocket
 import Debug exposing ( log )
 
 main =
@@ -58,10 +60,16 @@ main =
         , subscriptions = subscriptions
         }
 
-subscriptions: Model -> Sub Msg
+subscriptions : Model -> Sub Msg
 subscriptions model =
-    Window.resizes WindowSize
-
+    if not model.isRemote then
+        Window.resizes WindowSize
+    else
+        Sub.batch
+            [ WebSocket.listen
+                  (Interface.getServer model.server) WebSocketMessage
+            , Window.resizes WindowSize
+            ]
 {-
 
 A few words about end of game.
@@ -163,10 +171,12 @@ init maybeModel =
                             , restoreState = ""
                             , gs = initialGameState False
                             , isRemote = False
+                            , isPublic = False
                             , server = makeProxyServer ServerMessage
                             , gameid = ""
                             , names = initialPlayerNames
                             , windowSize = Nothing
+                            , newIsRemote = False
                             }
                   in
                       ( { mod
@@ -208,6 +218,14 @@ updateInternal msg model =
             init Nothing
         ServerMessage si message ->
             serverMessage si message model
+        SetIsRemote isRemote ->
+            ( { model | newIsRemote = isRemote }
+            , Cmd.none
+            )
+        SetIsPublic isPublic ->
+            ( { model | isPublic = isPublic }
+            , Cmd.none
+            )
         SetRestoreState text ->
             ( { model | restoreState = text }
             , Cmd.none
@@ -743,6 +761,8 @@ renderGamePage model =
         tl = bsb gs.topList
         b  = bsb gs.board
         bl = bsb gs.bottomList
+        remote = model.newIsRemote
+        public = model.isPublic
     in
         div []
             [ Board.render
@@ -753,16 +773,27 @@ renderGamePage model =
             , br
             , Board.render
                 bl False setupLocations listCellSize botsel modNodeMsg
-            , newGameButton
+            , p []
+                [ checkbox "remote" remote False SetIsRemote
+                , text " "
+                , checkbox "public" public (not remote) SetIsPublic
+                , text " "
+                , button [ onClick NewGame ]
+                      [ text "New Game" ]
+                ]
             ]
 
-newGameButton : Html Msg
-newGameButton =
-    p []
-        [ button [ onClick NewGame ]
-              [ text "New Game" ]
+checkbox : String -> Bool -> Bool -> (Bool -> msg) -> Html msg
+checkbox text_ isChecked isDisabled checker =
+    span []
+        [ input [ type_ "checkbox"
+                , onCheck checker
+                , checked isChecked
+                , disabled isDisabled
+                ]
+              []
+        , text text_
         ]
-
 
 footer : Html Msg
 footer =

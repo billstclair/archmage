@@ -54,17 +54,17 @@ type WhichBoard
 
 type Msg
     = ServerMessage (ServerInterface Msg) Message
+    | WebSocketMessage String
     | SetChatInput String
     | SendChat
     | ChatKeydown Int
     | ChatScroll Float
     | SetChatSize Int
-    | SetIsLocal Bool
-    | SetIsGlobal Bool
     | SetName String
     | SetGameid String
-    | SetServerUrl String
     | NewGame
+    | SetIsRemote Bool
+    | SetIsPublic Bool
     | SetRestoreState String
     | RestoreGame
     | JoinGame
@@ -72,11 +72,9 @@ type Msg
     | ResignGame
     | SetInput Int String
     | NodeClick ClickKind WhichBoard Node
-    | Focus Int
     | SetPage Page
     | RefreshPublicGames
     | Undo
-    | Tick Time
     | WindowSize Window.Size
     | Noop
 
@@ -179,6 +177,7 @@ type alias Model =
     , message : Maybe String
     , gs : GameState
     , isRemote : Bool
+    , isPublic : Bool
     , server : ServerInterface Msg
     , gameid : String
     , names : PlayerNames
@@ -186,6 +185,7 @@ type alias Model =
     , restoreState : String
     , windowSize : Maybe Window.Size
     , renderInfo : Maybe RenderInfo
+    , newIsRemote : Bool
     }
 
 type TheGameState =
