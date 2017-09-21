@@ -93,20 +93,19 @@ nodeSelectionDecoder =
         (JD.field "color" JD.string)
         (JD.field "node" JD.string)
 
-makeServerInterface : String -> Maybe ServerState -> ServerInterface Msg
-makeServerInterface server state =
+makeServerInterface : String -> ServerInterface Msg
+makeServerInterface server =
     ServerInterface
     { server = server
     , wrapper = (\_ _ -> Noop)
-    , state = state
+    , state = Nothing
     , sender = (\_ _ -> Cmd.none)
     }
 
 serverInterfaceDecoder : Decoder (ServerInterface Msg)
 serverInterfaceDecoder =
-    JD.map2 makeServerInterface
-        (JD.field "server" JD.string)
-        (JD.field "state" (JD.nullable serverStateDecoder))
+    JD.map makeServerInterface
+        JD.string
 
 gsDictDecoder : Decoder (Dict String GameState)
 gsDictDecoder =
@@ -678,32 +677,7 @@ nodeSelectionEncoder (color, node) =
 
 serverInterfaceEncoder : ServerInterface Msg -> Value
 serverInterfaceEncoder (ServerInterface server) =
-    JE.object [ ("server", JE.string server.server)
-              , ("state", case server.state of
-                              Nothing ->
-                                  JE.null
-                              Just state ->
-                                  serverStateEncoder state
-                )
-              ]
-
--- TODO
-serverStateEncoder : ServerState -> Value
-serverStateEncoder state =
-    JE.object
-        [ ("gameDict"
-          , state.gameDict
-          |> Dict.toList
-          |> List.map (\(k, v) ->
-                         JE.object [ ("gameid", JE.string k)
-                                   , ("state", gameStateEncoder v)
-                                   ]
-                      )
-          |> JE.list
-          )
-        , ("names", playerNamesEncoder state.names)
-        , ("publicGames", JE.list <| List.map publicGameEncoder state.publicGames)
-        ]
+    JE.string server.server
 
 -- GameState
 

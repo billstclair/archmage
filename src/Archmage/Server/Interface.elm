@@ -92,27 +92,30 @@ sender (ServerInterface interface) message =
 -- This fills in the blanks in the output of EncodeDecode.decodeModel
 fillinModel : Model -> Model
 fillinModel model =
-    { model
-        | gs = Board.addAnalysis model.gs
-        , server = fillinServer model.server
-    }
-
-fillinServer : ServerInterface Msg -> ServerInterface Msg
-fillinServer (ServerInterface si) =
-    let s = fillinServerState si.state
+    let mod = { model | gs = Board.addAnalysis model.gs }
     in
-        ServerInterface
-        <| if si.server == "" then
-               { si
-                   | wrapper = ServerMessage
-                   , state = s
-                   , sender = proxySender
-               }
-           else
-               { si
-                   | state = s
-                   , sender = sender
-               }
+        { mod | server = fillinServer mod }
+
+fillinServer : Model -> ServerInterface Msg
+fillinServer model =
+    case model.server of
+        ServerInterface si ->
+            let s = fillinServerState si.state
+            in
+                ServerInterface
+                <| if si.server == "" then
+                       { si
+                           | wrapper = ServerMessage
+                           , state =
+                               Just
+                               { gameDict = Dict.fromList [(model.gameid, model.gs)]
+                               , names = model.names
+                               , publicGames = []
+                               }
+                           , sender = proxySender
+                       }
+                   else
+                       { si | sender = sender }
 
 fillinServerState : Maybe ServerState -> Maybe ServerState
 fillinServerState state =
