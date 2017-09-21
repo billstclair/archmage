@@ -589,20 +589,22 @@ undoButton model =
            ]
         [ text "Undo" ]
 
-iframe : String -> Html Msg
-iframe url =
-    Html.iframe [ style [ ("width", "40em")
-                        , ("height", "40em")
-                        ]
-                , src url
-                ]
-        []
+iframe : Model -> String -> Html Msg
+iframe model url =
+    let width = toString (7 * model.renderInfo.cellSize ) ++ "px"
+    in
+        Html.iframe [ style [ ("width", width)
+                            , ("height", "40em")
+                            ]
+                    , src url
+                    ]
+            []
 
 renderIframePage : Model -> String -> Html Msg
 renderIframePage model url =
     div []
         [ playButton
-        , iframe url
+        , iframe model url
         , playButton
         ]
 
