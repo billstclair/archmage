@@ -9,9 +9,7 @@
 --
 ----------------------------------------------------------------------
 
-module Archmage.Types exposing ( Model, SavedModel
-                               , modelToSavedModel, savedModelToModel
-                               , encodeSavedModel, decodeSavedModel
+module Archmage.Types exposing ( Model
                                , GameState, Page(..), Msg(..), Piece(..), Board, Node
                                , TheGameState(..), NodeSelection, ColoredPiece
                                , Point, PointDict, RenderInfo, Mode(..)
@@ -176,37 +174,18 @@ emptyAnalysis =
 
 type alias Model =
     { page : Page
-    , windowSize : Maybe Window.Size
     , nodeSelections : List NodeSelection
-    , renderInfo : RenderInfo
     , message : Maybe String
-    , restoreState : String
     , gs : GameState
     , isRemote : Bool
     , server : ServerInterface Msg
     , gameid : String
     , names : PlayerNames
+    -- not persisted
+    , restoreState : String
+    , windowSize : Maybe Window.Size
+    , renderInfo : Maybe RenderInfo
     }
-
-type alias SavedModel =
-    -- For now
-    Model
-
-modelToSavedModel : Model -> SavedModel
-modelToSavedModel model =
-    model
-
-savedModelToModel : SavedModel -> Model
-savedModelToModel savedModel =
-    savedModel
-
-encodeSavedModel : SavedModel -> String
-encodeSavedModel savedModel =
-    ""
-
-decodeSavedModel : String -> Result String SavedModel
-decodeSavedModel json =
-    Err "decodeSavedModel not yet implemented."
 
 type TheGameState =
     TheGameState GameState

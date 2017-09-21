@@ -10,14 +10,16 @@
 ----------------------------------------------------------------------
 
 module Archmage.Server.EncodeDecode 
-    exposing ( encodeGameState, decodeGameState, restoreGame
+    exposing ( encodeModel, decodeModel
+             , encodeGameState, decodeGameState, restoreGame
              , decodeMessage, encodeMessage, modeToString
              , fixCurlyQuotes
              )
 
 import Archmage.Types as Types
-    exposing ( GameState, Color(..), Piece(..), Board, Node
-             , ColoredPiece, Player(..), TheGameState(..)
+    exposing ( Model, GameState, Color(..), Piece(..), Board, Node
+             , NodeSelection, Page(..), ServerInterface(..), Msg
+             , ColoredPiece, Player(..), TheGameState(..), ServerState
              , GameAnalysis, emptyAnalysis
              , Mode(..), pieceToString, stringToPiece
              , Message(..), PublicGame, PublicGames, PlayerNames
@@ -30,10 +32,19 @@ import Json.Decode as JD exposing ( Decoder )
 import Json.Encode as JE exposing ( Value )
 import Char
 import String.Extra as SE
+import Dict
 
 ---
---- Decoder
+--- Decoders
 ---
+
+-- Model
+
+decodeModel : String -> Result String Model
+decodeModel json =
+    Err "decodeModel not yet implemented."
+
+-- GameState
 
 restoreGame : String -> Result String GameState
 restoreGame restoreString =
@@ -251,7 +262,7 @@ theGameStateDecoder : Decoder TheGameState
 theGameStateDecoder =
     JD.lazy (\() -> JD.map TheGameState gameStateDecoder)
 
--- TODO
+-- Message
 
 decodeMessage : String -> Result String Message
 decodeMessage string =
@@ -541,8 +552,76 @@ parseResponse msg params rawMessage =
             rawMessage
 
 ---
---- Encoder
+--- Encoders
 ---
+
+-- Model
+
+encodeModel : Model -> String
+encodeModel model =
+    JE.encode 0 <| modelEncoder model
+
+modelEncoder : Model -> Value
+modelEncoder model =
+    JE.object
+        [ ("page", pageEncoder model.page)
+        , ("gameid", JE.string model.gameid)
+        , ("isRemote", JE.bool model.isRemote)
+        , ("names", playerNamesEncoder model.names)
+        , ("nodeSelections"
+          , JE.list
+              <| List.map nodeSelectionEncoder model.nodeSelections
+          )
+        , ("message", case model.message of
+                          Nothing -> JE.null
+                          Just m -> JE.string m
+          )
+        , ("gs", gameStateEncoder model.gs)
+        , ("server", serverInterfaceEncoder model.server)
+        ]
+
+-- TODO
+pageEncoder : Page -> Value
+pageEncoder page =
+    JE.string
+        <| case page of
+               GamePage -> "gamePage"
+               PublicPage -> "publicPage"
+               RulesPage -> "rulesPage"
+               HelpPage -> "helpPage"
+
+nodeSelectionEncoder : NodeSelection -> Value
+nodeSelectionEncoder (color, node) =
+    JE.object [ ("color", JE.string color)
+              , ("node", JE.string node)
+              ]
+
+serverInterfaceEncoder : ServerInterface Msg -> Value
+serverInterfaceEncoder (ServerInterface server) =
+    JE.object [ ("server", JE.string server.server)
+              , ("state", case server.state of
+                              Nothing ->
+                                  JE.null
+                              Just state ->
+                                  encodeServerState state
+                )
+              ]
+
+-- TODO
+encodeServerState : ServerState -> Value
+encodeServerState state =
+    JE.object
+        [ ("gameDict"
+          , state.gameDict
+          |> Dict.toList
+          |> List.map (\(k, v) -> (k, gameStateEncoder v))
+          |> JE.object
+          )
+        , ("names", playerNamesEncoder state.names)
+        , ("publicGames", JE.list <| List.map publicGameEncoder state.publicGames)
+        ]
+
+-- GameState
 
 encodeGameState : GameState -> String
 encodeGameState gs =
@@ -627,6 +706,8 @@ publicGameEncoder game =
 encodePublicGames : PublicGames -> String
 encodePublicGames games =
     JE.encode 0 <| JE.list (List.map publicGameEncoder games)
+
+-- Message
 
 encodeMessage : Message -> String
 encodeMessage message =

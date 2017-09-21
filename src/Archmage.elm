@@ -158,7 +158,7 @@ init maybeModel =
               Nothing ->
                   let mod = { page = GamePage
                             , nodeSelections = []
-                            , renderInfo = Board.renderInfo pieceSize
+                            , renderInfo = Just <| Board.renderInfo pieceSize
                             , message = Nothing
                             , restoreState = ""
                             , gs = initialGameState False
@@ -280,7 +280,7 @@ updateInternal msg model =
         WindowSize size ->
             ( { model
                   | windowSize = Just size
-                  , renderInfo = Board.renderInfo <| windowSizeToPieceSize size
+                  , renderInfo = Just <| Board.renderInfo <| windowSizeToPieceSize size
               }
             , Cmd.none
             )
@@ -591,11 +591,17 @@ undoButton model =
 
 iframe : Model -> String -> Html Msg
 iframe model url =
-    let width = toString (7 * model.renderInfo.cellSize ) ++ "px"
+    let s = case model.renderInfo of
+                Nothing ->
+                    []
+                Just ri ->
+                    let width = 7 * ri.cellSize
+                    in
+                        [ ("width", (toString width) ++ "px")
+                        , ("height", "40em")
+                        ]
     in
-        Html.iframe [ style [ ("width", width)
-                            , ("height", "40em")
-                            ]
+        Html.iframe [ style s
                     , src url
                     ]
             []
@@ -704,7 +710,11 @@ view model =
 
 renderGamePage : Model -> Html Msg
 renderGamePage model =
-    let renderInfo = model.renderInfo
+    let renderInfo = case model.renderInfo of
+                         Nothing ->
+                             Board.renderInfo pieceSize
+                         Just ri ->
+                             ri
         cellSize = renderInfo.cellSize
         locations = renderInfo.locations
         gs = model.gs

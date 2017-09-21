@@ -14,8 +14,10 @@ port module ArchmagePorts exposing (..)
 
 import Archmage exposing ( init, view, update, subscriptions )
 import Archmage.Types as Types exposing ( Model, Msg )
+import Archmage.Server.EncodeDecode exposing ( encodeModel, decodeModel )
 
 import Html
+import Debug exposing ( log )
 
 port setStorage : String -> Cmd a
 
@@ -32,8 +34,7 @@ main =
 updateWithStorage : Msg -> Model -> ( Model, Cmd Msg )
 updateWithStorage msg model =
     let ( newModel, cmds ) = update msg model
-        savedModel = Types.modelToSavedModel newModel
-        json = Types.encodeSavedModel savedModel
+        json = encodeModel newModel
     in
         ( newModel
         , Cmd.batch [ setStorage json
@@ -47,8 +48,8 @@ initWithStorage maybeJson =
         Nothing ->
             init Nothing
         Just json ->
-            case Types.decodeSavedModel json of
+            case decodeModel json of
                 Err _ ->
                     init Nothing
-                Ok savedModel ->
-                    init <| Just (Types.savedModelToModel savedModel)
+                Ok model ->
+                    init <| Just model
