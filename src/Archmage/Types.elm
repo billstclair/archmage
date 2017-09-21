@@ -17,6 +17,7 @@ module Archmage.Types exposing ( Model
                                , NodeMsg, ClickKind(..), WhichBoard(..)
                                , Move, MovesDict, Direction(..)
                                , Message(..), PublicGames, PublicGame, ServerState
+                               , noMessage
                                , PlayerNames, initialPlayerNames
                                , ServerInterface(..), emptyPublicGames
                                , getBoardPiece, setBoardPiece
@@ -376,6 +377,10 @@ initialPlayerNames =
     { white = "White"
     , black = "Black"
     }
+
+noMessage : Message
+noMessage =
+    RawMessage "" "" []
 
 type Message
     = RawMessage String String (List (String, String))
