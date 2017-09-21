@@ -230,16 +230,16 @@ processResponse model socket state message response =
                 )
         JoinRsp { gameid, names, gameState } ->
              let (model3, _) = disconnection model socket
-                 st2 = state
                  sockets = case Dict.get gameid model3.socketsDict of
                                Nothing -> [] --can't happen
                                Just socks -> socks
+                 newSockets = socket :: sockets
                  model4 = { model3
-                              | state = st2
+                              | state = state
                               , gameidDict =
                                   Dict.insert socket gameid model3.gameidDict
                               , socketsDict =
-                                  Dict.insert gameid (socket :: sockets)
+                                  Dict.insert gameid newSockets
                                       model3.socketsDict
                           }
                  rsp = JoinRsp { gameid = gameid
@@ -248,7 +248,7 @@ processResponse model socket state message response =
                                }
              in
                  ( model4
-                 , sendToMany rsp sockets
+                 , sendToMany rsp newSockets
                  )
         ErrorRsp _ ->
             ( model
