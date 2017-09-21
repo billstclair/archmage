@@ -15,6 +15,7 @@ port module ArchmagePorts exposing (..)
 import Archmage exposing ( init, view, update, subscriptions )
 import Archmage.Types as Types exposing ( Model, Msg )
 import Archmage.Server.EncodeDecode exposing ( encodeModel, decodeModel )
+import Archmage.Server.Interface exposing ( fillinModel )
 
 import Html
 import Debug exposing ( log )
@@ -49,7 +50,11 @@ initWithStorage maybeJson =
             init Nothing
         Just json ->
             case decodeModel json of
-                Err _ ->
-                    init Nothing
+                Err msg ->
+                    let m = msg
+                    in
+                        init Nothing
                 Ok model ->
-                    init <| Just model
+                    init
+                    <| Just
+                    <| fillinModel model

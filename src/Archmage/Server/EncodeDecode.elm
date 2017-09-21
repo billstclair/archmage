@@ -1,4 +1,4 @@
-----------------------------------------------------------------------
+---------------------------------------------------------------------
 --
 -- EncodeDecode.elm
 -- JSON encoder and decoder for Archmage server wire protocol.
@@ -18,7 +18,7 @@ module Archmage.Server.EncodeDecode
 
 import Archmage.Types as Types
     exposing ( Model, GameState, Color(..), Piece(..), Board, Node
-             , NodeSelection, Page(..), ServerInterface(..), Msg
+             , NodeSelection, Page(..), ServerInterface(..), Msg(..)
              , ColoredPiece, Player(..), TheGameState(..), ServerState
              , GameAnalysis, emptyAnalysis
              , Mode(..), pieceToString, stringToPiece
@@ -32,7 +32,7 @@ import Json.Decode as JD exposing ( Decoder )
 import Json.Encode as JE exposing ( Value )
 import Char
 import String.Extra as SE
-import Dict
+import Dict exposing ( Dict )
 
 ---
 --- Decoders
@@ -42,7 +42,87 @@ import Dict
 
 decodeModel : String -> Result String Model
 decodeModel json =
-    Err "decodeModel not yet implemented."
+    JD.decodeString modelDecoder json
+
+--    Err "decodeModel not yet implemented."
+  
+
+modelDecoder : Decoder Model
+modelDecoder =
+    JD.map8 makeSavedModel
+        (JD.field "page" pageDecoder)
+        (JD.field "gameid" JD.string)
+        (JD.field "isRemote" JD.bool)
+        (JD.field "names" playerNamesDecoder)
+        (JD.field "nodeSelections" (JD.list nodeSelectionDecoder))
+        (JD.field "message" (JD.nullable JD.string))
+        (JD.field  "gs" gameStateDecoder)
+        (JD.field "server" serverInterfaceDecoder)
+
+makeSavedModel : Page -> String -> Bool -> PlayerNames -> List NodeSelection -> Maybe String -> GameState -> ServerInterface Msg -> Model
+makeSavedModel page gameid isRemote names nodeSelections message gs server =
+    { page = page
+    , nodeSelections = nodeSelections
+    , message = message
+    , gs = gs
+    , isRemote = isRemote
+    , server = server
+    , gameid = gameid
+    , names = names
+    , restoreState = ""
+    , windowSize = Nothing
+    , renderInfo = Nothing
+    }
+
+makePage : String -> Decoder Page
+makePage string =
+    case string of
+        "gamePage" -> JD.succeed GamePage
+        "publicPage" -> JD.succeed PublicPage
+        "rulesPage" -> JD.succeed RulesPage
+        "helpPage" -> JD.succeed HelpPage
+        _ -> JD.fail <| "Unknown page name: " ++ string
+
+pageDecoder : Decoder Page
+pageDecoder =
+    JD.andThen makePage JD.string
+        
+nodeSelectionDecoder : Decoder NodeSelection
+nodeSelectionDecoder =
+    JD.map2 (,)
+        (JD.field "color" JD.string)
+        (JD.field "node" JD.string)
+
+makeServerInterface : String -> Maybe ServerState -> ServerInterface Msg
+makeServerInterface server state =
+    ServerInterface
+    { server = server
+    , wrapper = (\_ _ -> Noop)
+    , state = state
+    , sender = (\_ _ -> Cmd.none)
+    }
+
+serverInterfaceDecoder : Decoder (ServerInterface Msg)
+serverInterfaceDecoder =
+    JD.map2 makeServerInterface
+        (JD.field "server" JD.string)
+        (JD.field "state" (JD.nullable serverStateDecoder))
+
+gsDictDecoder : Decoder (Dict String GameState)
+gsDictDecoder =
+    (JD.map2 (,)
+         (JD.field "gameid" JD.string)
+         (JD.field "state" gameStateDecoder)
+    )
+    |> JD.list
+    |> JD.map Dict.fromList
+
+serverStateDecoder : Decoder ServerState
+serverStateDecoder =
+    JD.map3 ServerState
+        (JD.field "gameDict" gsDictDecoder)
+        (JD.field "names" playerNamesDecoder)
+        (JD.field "publicGames" publicGamesDecoder)
 
 -- GameState
 
@@ -603,19 +683,23 @@ serverInterfaceEncoder (ServerInterface server) =
                               Nothing ->
                                   JE.null
                               Just state ->
-                                  encodeServerState state
+                                  serverStateEncoder state
                 )
               ]
 
 -- TODO
-encodeServerState : ServerState -> Value
-encodeServerState state =
+serverStateEncoder : ServerState -> Value
+serverStateEncoder state =
     JE.object
         [ ("gameDict"
           , state.gameDict
           |> Dict.toList
-          |> List.map (\(k, v) -> (k, gameStateEncoder v))
-          |> JE.object
+          |> List.map (\(k, v) ->
+                         JE.object [ ("gameid", JE.string k)
+                                   , ("state", gameStateEncoder v)
+                                   ]
+                      )
+          |> JE.list
           )
         , ("names", playerNamesEncoder state.names)
         , ("publicGames", JE.list <| List.map publicGameEncoder state.publicGames)

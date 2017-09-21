@@ -11,13 +11,13 @@
 
 module Archmage.Server.Interface exposing ( emptyServerState
                                           , makeProxyServer, makeServer, send
-                                          , getServer
+                                          , getServer, fillinModel
                                           , processServerMessage
                                           )
 
 import Archmage.Server.EncodeDecode exposing ( encodeMessage, modeToString )
 import Archmage.Types as Types
-    exposing ( GameState, Piece(..), Board, Node
+    exposing ( Model, GameState, Piece(..), Board, Node, Msg(..)
              , TheGameState(..), NodeSelection, ColoredPiece
              , Mode(..), Color(..), Player(..)
              , Message(..), ServerInterface(..), PlayerNames, initialPlayerNames
@@ -88,6 +88,45 @@ proxySender (ServerInterface interface) message =
 sender : ServerInterface msg -> Message -> Cmd msg
 sender (ServerInterface interface) message =
     WebSocket.send interface.server (encodeMessage message)
+
+-- This fills in the blanks in the output of EncodeDecode.decodeModel
+fillinModel : Model -> Model
+fillinModel model =
+    { model
+        | gs = Board.addAnalysis model.gs
+        , server = fillinServer model.server
+    }
+
+fillinServer : ServerInterface Msg -> ServerInterface Msg
+fillinServer (ServerInterface si) =
+    let s = fillinServerState si.state
+    in
+        ServerInterface
+        <| if si.server == "" then
+               { si
+                   | wrapper = ServerMessage
+                   , state = s
+                   , sender = proxySender
+               }
+           else
+               { si
+                   | state = s
+                   , sender = sender
+               }
+
+fillinServerState : Maybe ServerState -> Maybe ServerState
+fillinServerState state =
+    case state of
+        Nothing ->
+            Nothing
+        Just st ->
+            Just
+            { st
+                | gameDict = st.gameDict
+                |> Dict.toList
+                |> List.map (\(k, v) -> (k, Board.addAnalysis v))
+                |> Dict.fromList
+            }
 
 errorRsp : Message -> String -> Message
 errorRsp message text =
