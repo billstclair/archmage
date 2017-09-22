@@ -51,7 +51,7 @@ modelDecoder : Decoder Model
 modelDecoder =
     JD.map8 makeSavedModel
         (JD.field "page" pageDecoder)
-        (JD.field "gameid" JD.string)
+        (JD.field "GameID" gameIDDecoder)
         (JD.field "remoteType" JD.string)
         (JD.field "names" playerNamesDecoder)
         (JD.field "nodeSelections" (JD.list nodeSelectionDecoder))
@@ -59,8 +59,23 @@ modelDecoder =
         (JD.field  "gs" gameStateDecoder)
         (JD.field "server" serverInterfaceDecoder)
 
-makeSavedModel : Page -> String -> String -> PlayerNames -> List NodeSelection -> Maybe String -> GameState -> ServerInterface Msg -> Model
-makeSavedModel page gameid remoteType names nodeSelections message gs server =
+-- These are put together only to enable JD.map8, which is the maximum
+-- number of args to a map function. Yes, I know the alternative.
+type alias GameID =
+    { gameid : String
+    , playerid : String
+    , you : Player
+    }
+
+gameIDDecoder : Decoder GameID
+gameIDDecoder =
+    JD.map3 GameID
+        (JD.field "gameid" JD.string)
+        (JD.field "playerid" JD.string)
+        (JD.field "you" playerDecoder)
+
+makeSavedModel : Page -> GameID -> String -> PlayerNames -> List NodeSelection -> Maybe String -> GameState -> ServerInterface Msg -> Model
+makeSavedModel page {gameid, playerid, you} remoteType names nodeSelections message gs server =
     let (isRemote, isPublic) = parseRemoteType remoteType
     in
         { page = page
@@ -71,6 +86,8 @@ makeSavedModel page gameid remoteType names nodeSelections message gs server =
         , isPublic = isPublic
         , server = server
         , gameid = gameid
+        , playerid = playerid
+        , you = you
         , names = names
         , restoreState = ""
         , windowSize = Nothing
@@ -370,6 +387,8 @@ type alias MessageParams =
     , isPublic : Bool
     , restoreState : Maybe GameState
     , gameid : Maybe String
+    , playerid : Maybe String
+    , you : Maybe Player
     , player : Maybe Player
     , gameState : Maybe GameState
     , text : Maybe String
@@ -391,6 +410,9 @@ rawMessageToParams message =
                  , isPublic = Maybe.withDefault False
                               <| maybeBool (get "isPublic" plist)
                  , gameid = get "gameid" plist
+                 , playerid = get "playerid" plist
+                 , you = maybePlayer
+                         <| get "you" plist
                  , player = maybePlayer
                             <| get "player" plist
                  , gameState = maybeGameState
@@ -648,7 +670,11 @@ modelEncoder : Model -> Value
 modelEncoder model =
     JE.object
         [ ("page", pageEncoder model.page)
-        , ("gameid", JE.string model.gameid)
+        , ("GameID", gameIDEncoder { gameid =  model.gameid
+                                   , playerid = model.playerid
+                                   , you = model.you
+                                   }
+          )
         , ("remoteType"
           , JE.string
               <| encodeRemoteType model.isRemote model.isPublic
@@ -666,7 +692,13 @@ modelEncoder model =
         , ("server", serverInterfaceEncoder model.server)
         ]
 
--- TODO
+gameIDEncoder : GameID -> Value
+gameIDEncoder id =
+    JE.object [ ("gameid", JE.string id.gameid)
+              , ("playerid", JE.string id.playerid)
+              , ("you", JE.string <| playerToString id.you)
+              ]
+
 pageEncoder : Page -> Value
 pageEncoder page =
     JE.string
@@ -883,8 +915,6 @@ messageEncoder message =
                 , ("player", playerToString player)
                 , ("text", text)
                 ]
-        
-            
 
 ---
 --- Primitives

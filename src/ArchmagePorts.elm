@@ -49,12 +49,10 @@ initWithStorage maybeJson =
         Nothing ->
             init Nothing
         Just json ->
-            case decodeModel json of
+            case decodeModel <| log "decodeModel" json of
                 Err msg ->
-                    let m = msg
+                    let m = log "  error" msg
                     in
                         init Nothing
                 Ok model ->
-                    init
-                    <| Just
-                    <| fillinModel model
+                    init (Just <| fillinModel model)

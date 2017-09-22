@@ -180,6 +180,8 @@ type alias Model =
     , isPublic : Bool
     , server : ServerInterface Msg
     , gameid : String
+    , playerid : String
+    , you : Player
     , names : PlayerNames
     -- not persisted
     , restoreState : String
