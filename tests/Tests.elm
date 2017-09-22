@@ -80,37 +80,39 @@ protocolData =
              , restoreState = Just <| Board.initialGameState False
              }
     , NewRsp { gameid = "asdf"
+             , playerid = "p1"
              , name = "John"
              }
     , NewRsp { gameid = "asdf"
+             , playerid = "p2"
              , name = "George"
              }
     , JoinReq { gameid = "asdf", name = "bill" }
-    , JoinRsp { gameid = "asdf"
-              , names = { white = "bill"
-                        , black = "chris"
+    , JoinRsp { playerid = "p2"
+              , names = { white = "Bob"
+                        , black = "bill"
                         }
               , gameState = Board.initialGameState True
               }
     , UpdateRsp { gameid = "asdf"
                 , gameState = Board.initialGameState True
                 }
-    , SelectPlacementReq { gameid = "asdf"
+    , SelectPlacementReq { playerid = "p1"
                          , node = "A"
                          }
-    , PlaceReq { gameid = "asdf"
+    , PlaceReq { playerid = "p2"
                , node = "A1"
                }
-    , SelectActorReq { gameid = "asdf"
+    , SelectActorReq { playerid = "p1"
                      , node = "A1"
                      }
-    , SelectSubjectReq { gameid = "asdf"
+    , SelectSubjectReq { playerid = "p2"
                        , node = "A1"
                        }
-    , MoveReq { gameid = "asdf"
+    , MoveReq { playerid = "p1"
               , node = "A1"
               }
-    , EndTurnReq { gameid = "asdf" }
+    , EndTurnReq { playerid = "p2" }
     , GamesReq
     , GamesRsp [ { gameid = "1"
                  , playerName = "Bill"
@@ -119,9 +121,9 @@ protocolData =
                  , playerName = "Bob"
                  }
                ]
-    , UndoReq { gameid = "asdf" }
+    , UndoReq { playerid = "p1" }
     , ErrorRsp { request = "foo", text = "Malformed request." }
-    , ChatReq { gameid = "asdf", player = BlackPlayer, text = "Hello, World!" }
+    , ChatReq { playerid = "p2", text = "Hello, World!" }
     , ChatRsp { gameid = "asdf", player = BlackPlayer, text = "Hello, World!" }
     ]
 

@@ -21,7 +21,7 @@ import Archmage.Types as Types
              , TheGameState(..), NodeSelection, ColoredPiece
              , Mode(..), Color(..), Player(..)
              , Message(..), ServerInterface(..), PlayerNames, initialPlayerNames
-             , ServerState, PublicGames, PublicGame, emptyPublicGames
+             , ServerState, PlayerInfo, PublicGames, PublicGame, emptyPublicGames
              , butLast, adjoin
              )
 import Archmage.Board as Board
@@ -39,6 +39,7 @@ import WebSocket
 emptyServerState : ServerState
 emptyServerState =
     { gameDict = Dict.empty
+    , playerDict = Dict.empty
     , names = initialPlayerNames
     , publicGames = emptyPublicGames
     }
@@ -46,6 +47,14 @@ emptyServerState =
 dummyGameid : String
 dummyGameid =
     "<gameid>"
+
+dummyWhitePlayerid : String
+dummyWhitePlayerid =
+    "<white>"
+
+dummyBlackPlayerid : String
+dummyBlackPlayerid =
+    "<black>"
 
 makeProxyServer : (ServerInterface msg -> Message -> msg) -> ServerInterface msg
 makeProxyServer wrapper =
@@ -101,6 +110,7 @@ fillinServer model =
     case model.server of
         ServerInterface si ->
             let s = fillinServerState si.state
+                gameid = model.gameid
             in
                 ServerInterface
                 <| if si.server == "" then
@@ -109,6 +119,19 @@ fillinServer model =
                            , state =
                                Just
                                { gameDict = Dict.fromList [(model.gameid, model.gs)]
+                               , playerDict =
+                                   Dict.fromList
+                                       [ ( dummyWhitePlayerid
+                                         , { gameid = gameid
+                                           , player = WhitePlayer
+                                           }
+                                         )
+                                       , ( dummyBlackPlayerid
+                                         , { gameid = gameid
+                                           , player = BlackPlayer
+                                           }
+                                         )
+                                       ]
                                , names = model.names
                                , publicGames = []
                                }
@@ -163,6 +186,14 @@ modeToName mode =
         Nothing ->
             "Unknown" --can't happen
 
+checkPlayerid : ServerState -> Message -> String -> Result Message PlayerInfo
+checkPlayerid state message playerid =
+    case Dict.get playerid state.playerDict of
+        Nothing ->
+            Err <| errorRsp message ("Unknown playerid " ++ playerid)
+        Just info ->
+            Ok info
+
 checkGameid : ServerState -> Message -> String -> List Mode -> Result Message GameState
 checkGameid state message gameid modes =
     case checkOnlyGameid state message gameid of
@@ -192,23 +223,23 @@ processServerMessage state message =
                     (state, err)
                 Ok gameState ->
                     joinReq state gameState message gameid name
-        SelectPlacementReq { gameid, node } ->
-            doGamePlay state message gameid [SetupMode]
+        SelectPlacementReq { playerid, node } ->
+            doGamePlay state message playerid [SetupMode]
                 (\gameState -> selectPlacementReq gameState node)
-        PlaceReq { gameid, node } ->
-            doGamePlay state message gameid [SetupMode]
+        PlaceReq { playerid, node } ->
+            doGamePlay state message playerid [SetupMode]
                 (\gameState -> placeReq gameState node)
-        SelectActorReq { gameid, node } ->
-            doGamePlay state message gameid playModes
+        SelectActorReq { playerid, node } ->
+            doGamePlay state message playerid playModes
                 (\gameState -> selectActorReq gameState node)
-        SelectSubjectReq { gameid, node } ->
-            doGamePlay state message gameid playModes
+        SelectSubjectReq { playerid, node } ->
+            doGamePlay state message playerid playModes
                 (\gameState -> selectSubjectReq gameState node)
-        MoveReq { gameid, node } ->
-            doGamePlay state message gameid playModes
+        MoveReq { playerid, node } ->
+            doGamePlay state message playerid playModes
                 (\gameState -> moveReq gameState node)
-        EndTurnReq { gameid } ->
-            doGamePlay state message gameid playModes
+        EndTurnReq { playerid } ->
+            doGamePlay state message playerid playModes
                 endTurnReq
             
         -- Public games
@@ -217,18 +248,18 @@ processServerMessage state message =
             , GamesRsp state.publicGames
             )
         -- Errors
-        UndoReq { gameid } ->
-            doGamePlay state message gameid playModes
+        UndoReq { playerid } ->
+            doGamePlay state message playerid playModes
                 undoReq
         -- Chat
-        ChatReq { gameid, player, text } ->
-            case checkOnlyGameid state message gameid of
+        ChatReq { playerid, text } ->
+            case checkPlayerid state message playerid of
                 Err err ->
                     (state, err)
-                Ok gameState  ->
+                Ok playerInfo  ->
                     ( state
-                    , ChatRsp { gameid = gameid
-                              , player = player
+                    , ChatRsp { gameid = playerInfo.gameid
+                              , player = playerInfo.player
                               , text = text
                               }
                     )
@@ -274,9 +305,15 @@ newReqInternal state message name isPublic restoreState =
         gs = Board.addAnalysis
              { gameState | mode = JoinMode }
         gameid = dummyGameid
+        playerid = dummyWhitePlayerid
+        playerInfo = { gameid = gameid
+                     , player = WhitePlayer
+                     }
         st2 = { state
                   | gameDict =
                       Dict.insert gameid gs state.gameDict
+                  , playerDict =
+                      Dict.insert playerid playerInfo state.playerDict
                   , names = { initialPlayerNames | white = name }
                   , publicGames =
                     if isPublic then
@@ -288,6 +325,7 @@ newReqInternal state message name isPublic restoreState =
                         state.publicGames                        
               }
         msg = NewRsp { gameid = gameid
+                     , playerid = playerid
                      , name = name
                      }
     in
@@ -298,25 +336,33 @@ type alias PlayFun =
     GameState -> Result String GameState
 
 doGamePlay : ServerState -> Message -> String -> List Mode -> PlayFun -> (ServerState, Message)
-doGamePlay state message gameid modes playFun =
-    case checkGameid state message gameid modes of
+doGamePlay state message playerid modes playFun =
+    case checkPlayerid state message playerid of
         Err err ->
             (state, err)
-        Ok gameState ->
-            case playFun gameState of
-                Err msg ->
-                    ( state, errorRsp message msg )
+        Ok {gameid, player} ->
+            case checkGameid state message gameid modes of
+                Err err ->
+                    (state, err)
                 Ok gameState ->
-                    let gs = Board.addAnalysis gameState
-                        message = UpdateRsp { gameid = gameid
-                                            , gameState = gs
-                                            }
-                    in
-                        ( { state
-                              | gameDict = Dict.insert gameid gs state.gameDict
-                          }
-                        , message
-                        )
+                    if player /= gameState.player then
+                        (state, errorRsp message "Wrong player.")
+                    else
+                        case playFun gameState of
+                            Err msg ->
+                                ( state, errorRsp message msg )
+                            Ok gameState ->
+                                let gs = Board.addAnalysis gameState
+                                    message = UpdateRsp { gameid = gameid
+                                                        , gameState = gs
+                                                        }
+                                in
+                                    ( { state
+                                          | gameDict =
+                                              Dict.insert gameid gs state.gameDict
+                                      }
+                                    , message
+                                    )
 
 initialPlacementSubject : GameState -> Maybe Node
 initialPlacementSubject gs =
@@ -353,12 +399,17 @@ joinReq state gameState message gameid name =
                              else
                                  Nothing
              }
-        msg = JoinRsp { gameid = gameid
+        playerid = dummyBlackPlayerid
+        playerInfo = { gameid = gameid
+                     , player = BlackPlayer
+                     }
+        msg = JoinRsp { playerid = playerid
                       , names = nms
                       , gameState = gs
                       }
         st2 = { state
                   | gameDict = Dict.insert gameid gs state.gameDict
+                  , playerDict = Dict.insert playerid playerInfo state.playerDict
                   , names = nms
                   , publicGames =
                       removeGameFromList state.publicGames gameid

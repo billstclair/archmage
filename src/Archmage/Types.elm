@@ -17,7 +17,7 @@ module Archmage.Types exposing ( Model
                                , NodeMsg, ClickKind(..), WhichBoard(..)
                                , Move, MovesDict, Direction(..)
                                , Message(..), PublicGames, PublicGame, ServerState
-                               , noMessage
+                               , noMessage, PlayerInfo
                                , PlayerNames, initialPlayerNames
                                , ServerInterface(..), emptyPublicGames
                                , getBoardPiece, setBoardPiece
@@ -188,6 +188,7 @@ type alias Model =
     , windowSize : Maybe Window.Size
     , renderInfo : Maybe RenderInfo
     , newIsRemote : Bool
+    , otherPlayerid : String
     }
 
 type TheGameState =
@@ -391,12 +392,13 @@ type Message
                , restoreState : Maybe GameState
                }
       | NewRsp { gameid : String
+               , playerid : String
                , name : String
                }
       | JoinReq { gameid : String
                 , name : String
                 }
-      | JoinRsp { gameid : String
+      | JoinRsp { playerid : String
                 , names : PlayerNames
                 , gameState : GameState
                 }
@@ -405,33 +407,32 @@ type Message
                   , gameState : GameState
                   }
       -- Placement
-      | SelectPlacementReq { gameid : String
+      | SelectPlacementReq { playerid : String
                            , node : String
                            }
-      | PlaceReq { gameid : String
+      | PlaceReq { playerid : String
                  , node : String
                  }
-      | SelectActorReq { gameid : String
+      | SelectActorReq { playerid : String
                        , node : String
                        }
-      | SelectSubjectReq { gameid : String
+      | SelectSubjectReq { playerid : String
                          , node : String
                          }
-      | MoveReq { gameid : String
+      | MoveReq { playerid : String
                 , node : String
                 }
-      | EndTurnReq { gameid : String }
+      | EndTurnReq { playerid : String }
       -- Public games
       | GamesReq
       | GamesRsp PublicGames
       -- Errors
-      | UndoReq { gameid : String }
+      | UndoReq { playerid : String }
       | ErrorRsp { request : String
                  , text : String
                  }
       -- Chat
-      | ChatReq { gameid : String
-                , player : Player
+      | ChatReq { playerid : String
                 , text : String
                 }
       | ChatRsp { gameid : String
@@ -439,8 +440,14 @@ type Message
                 , text : String
                 }
 
+type alias PlayerInfo =
+    { gameid : String
+    , player : Player
+    }
+
 type alias ServerState =
     { gameDict : Dict String GameState --gameid -> GameState
+    , playerDict : Dict String PlayerInfo --playerid -> PlayerInfo
     , names : PlayerNames
     , publicGames : PublicGames
     }

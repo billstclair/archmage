@@ -20,7 +20,7 @@ import Archmage.Types as Types
     exposing ( Model, GameState, Color(..), Piece(..), Board, Node
              , NodeSelection, Page(..), ServerInterface(..), Msg(..)
              , ColoredPiece, Player(..), TheGameState(..), ServerState
-             , GameAnalysis, emptyAnalysis
+             , PlayerInfo, GameAnalysis, emptyAnalysis
              , Mode(..), pieceToString, stringToPiece
              , Message(..), PublicGame, PublicGames, PlayerNames
              , get, rget
@@ -93,6 +93,7 @@ makeSavedModel page {gameid, playerid, you} remoteType names nodeSelections mess
         , windowSize = Nothing
         , renderInfo = Nothing
         , newIsRemote = isRemote
+        , otherPlayerid = ""
         }
 
 makePage : String -> Decoder Page
@@ -127,22 +128,6 @@ serverInterfaceDecoder : Decoder (ServerInterface Msg)
 serverInterfaceDecoder =
     JD.map makeServerInterface
         JD.string
-
-gsDictDecoder : Decoder (Dict String GameState)
-gsDictDecoder =
-    (JD.map2 (,)
-         (JD.field "gameid" JD.string)
-         (JD.field "state" gameStateDecoder)
-    )
-    |> JD.list
-    |> JD.map Dict.fromList
-
-serverStateDecoder : Decoder ServerState
-serverStateDecoder =
-    JD.map3 ServerState
-        (JD.field "gameDict" gsDictDecoder)
-        (JD.field "names" playerNamesDecoder)
-        (JD.field "publicGames" publicGamesDecoder)
 
 -- GameState
 
@@ -473,100 +458,95 @@ parseRequest msg params rawMessage =
                                     }
         -- Placement
         "selectPlacement" ->
-            case params.gameid of
+            case params.playerid of
                 Nothing ->
                     rawMessage
-                Just gid ->
+                Just pid ->
                     case params.node of
                         Nothing ->
                             rawMessage
                         Just n ->
-                            SelectPlacementReq { gameid = gid
+                            SelectPlacementReq { playerid = pid
                                                , node = n
                                                }
         "place" ->
-            case params.gameid of
+            case params.playerid of
                 Nothing ->
                     rawMessage
-                Just gid ->
+                Just pid ->
                     case params.node of
                         Nothing ->
                             rawMessage
                         Just n ->
-                            PlaceReq { gameid = gid
+                            PlaceReq { playerid = pid
                                      , node = n
                                      }
         -- Game play
         "selectActor" ->
-            case params.gameid of
+            case params.playerid of
                 Nothing ->
                     rawMessage
-                Just gid ->
+                Just pid ->
                     case params.node of
                         Nothing ->
                             rawMessage
                         Just n ->
-                            SelectActorReq { gameid = gid
+                            SelectActorReq { playerid = pid
                                            , node = n
                                            }
         "selectSubject" ->
-            case params.gameid of
+            case params.playerid of
                 Nothing ->
                     rawMessage
-                Just gid ->
+                Just pid ->
                     case params.node of
                         Nothing ->
                             rawMessage
                         Just n ->
-                            SelectSubjectReq { gameid = gid
+                            SelectSubjectReq { playerid = pid
                                              , node = n
                                              }
         "move" ->
-            case params.gameid of
+            case params.playerid of
                 Nothing ->
                     rawMessage
-                Just gid ->
+                Just pid ->
                     case params.node of
                         Nothing ->
                             rawMessage
                         Just n ->
-                            MoveReq { gameid = gid
+                            MoveReq { playerid = pid
                                     , node = n
                                     }
         "endTurn" ->
-            case params.gameid of
+            case params.playerid of
                 Nothing ->
                     rawMessage
-                Just gid ->
-                    EndTurnReq { gameid = gid }
+                Just pid ->
+                    EndTurnReq { playerid = pid }
         -- Public games
         "games" ->
             GamesReq
         -- Errors
         "undo" ->
-            case params.gameid of
+            case params.playerid of
                 Nothing ->
                     rawMessage
-                Just gid ->
-                    UndoReq { gameid = gid }
+                Just pid ->
+                    UndoReq { playerid = pid }
         -- Chat
         "chat" ->
-            case params.gameid of
+            case params.playerid of
                 Nothing ->
                     rawMessage
-                Just gid ->
-                    case params.player of
+                Just pid ->
+                    case params.text of
                         Nothing ->
                             rawMessage
-                        Just p ->
-                            case params.text of
-                                Nothing ->
-                                    rawMessage
-                                Just t ->
-                                    ChatReq { gameid = gid
-                                            , player = p
-                                            , text = t
-                                            }
+                        Just t ->
+                            ChatReq { playerid = pid
+                                    , text = t
+                                    }
         _ ->
             rawMessage
 
@@ -579,18 +559,23 @@ parseResponse msg params rawMessage =
                 Nothing ->
                     rawMessage
                 Just gid ->
-                    case params.name of
+                    case params.playerid of
                         Nothing ->
                             rawMessage
-                        Just n ->
-                            NewRsp { gameid = gid
-                                   , name = n
-                                   }
+                        Just pid ->
+                            case params.name of
+                                Nothing ->
+                                    rawMessage
+                                Just n ->
+                                    NewRsp { gameid = gid
+                                           , playerid = pid
+                                           , name = n
+                                           }
         "join" ->
-            case params.gameid of
+            case params.playerid of
                 Nothing ->
                     rawMessage
-                Just gid ->
+                Just pid ->
                     case params.names of
                         Nothing ->
                             rawMessage
@@ -599,7 +584,7 @@ parseResponse msg params rawMessage =
                                 Nothing ->
                                     rawMessage
                                 Just gs ->
-                                    JoinRsp { gameid = gid
+                                    JoinRsp { playerid = pid
                                             , names = ns
                                             , gameState = gs
                                             }
@@ -840,13 +825,16 @@ messageEncoder message =
                         , isPublicPairs
                         , rsPairs
                         ]
-        NewRsp { gameid, name } ->
-            messageValue "rsp" "new" [ ("gameid", gameid), ("name", name) ]
+        NewRsp { gameid, playerid, name } ->
+            messageValue "rsp" "new"
+                [ ("gameid", gameid)
+                , ("playerid", playerid)
+                , ("name", name) ]
         JoinReq { gameid, name } ->
             messageValue "req" "join" [ ("gameid", gameid), ("name", name) ]
-        JoinRsp { gameid, names, gameState } ->
+        JoinRsp { playerid, names, gameState } ->
             messageValue "rsp" "join"
-                [ ("gameid", gameid)
+                [ ("playerid", playerid)
                 , ("names", encodePlayerNames names)
                 , ("gameState", encodeGameState gameState)
                 ]
@@ -857,35 +845,35 @@ messageEncoder message =
                 , ("gameState", encodeGameState gameState)
                 ]
         -- Placement
-        SelectPlacementReq { gameid, node } ->
+        SelectPlacementReq { playerid, node } ->
             messageValue "req" "selectPlacement"
-                [ ("gameid", gameid)
+                [ ("playerid", playerid)
                 , ("node", node)
                 ]
-        PlaceReq { gameid, node } ->
+        PlaceReq { playerid, node } ->
             messageValue "req" "place"
-                [ ("gameid", gameid)
+                [ ("playerid", playerid)
                 , ("node", node)
                 ]
         -- Game play
-        SelectActorReq { gameid, node } ->
+        SelectActorReq { playerid, node } ->
             messageValue "req" "selectActor"
-                [ ("gameid", gameid)
+                [ ("playerid", playerid)
                 , ("node", node)
                 ]
-        SelectSubjectReq { gameid, node } ->
+        SelectSubjectReq { playerid, node } ->
             messageValue "req" "selectSubject"
-                [ ("gameid", gameid)
+                [ ("playerid", playerid)
                 , ("node", node)
                 ]
-        MoveReq { gameid, node } ->
+        MoveReq { playerid, node } ->
             messageValue "req" "move"
-                [ ("gameid", gameid)
+                [ ("playerid", playerid)
                 , ("node", node)
                 ]
-        EndTurnReq { gameid } ->
+        EndTurnReq { playerid } ->
             messageValue "req" "endTurn"
-                [ ("gameid", gameid)
+                [ ("playerid", playerid)
                 ]
         -- Public games
         GamesReq ->
@@ -895,18 +883,17 @@ messageEncoder message =
             messageValue "rsp" "games"
                 [ ("games", encodePublicGames games) ]
         -- Errors
-        UndoReq { gameid } ->
-            messageValue "req" "undo" [ ("gameid", gameid) ]
+        UndoReq { playerid } ->
+            messageValue "req" "undo" [ ("playerid", playerid) ]
         ErrorRsp { request, text } ->
             messageValue "rsp" "error"
                 [ ("request", request)
                 , ("text", text)
                 ]
         -- Chat
-        ChatReq { gameid, player, text } ->
+        ChatReq { playerid, text } ->
             messageValue "req" "chat"
-                [ ("gameid", gameid)
-                , ("player", playerToString player)
+                [ ("playerid", playerid)
                 , ("text", text)
                 ]
         ChatRsp { gameid, player, text } ->

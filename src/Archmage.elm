@@ -179,6 +179,7 @@ init maybeModel =
                             , names = initialPlayerNames
                             , windowSize = Nothing
                             , newIsRemote = False
+                            , otherPlayerid = ""
                             }
                   in
                       ( { mod
@@ -213,6 +214,13 @@ update msg model =
     in
         (mod2, cmd)
         
+getPlayerid : Model -> String
+getPlayerid model =
+    if model.isRemote || model.gs.player == WhitePlayer then
+        model.playerid
+    else
+        model.otherPlayerid
+
 updateInternal : Msg -> Model -> ( Model, Cmd Msg )
 updateInternal msg model =
     case msg of
@@ -253,47 +261,47 @@ updateInternal msg model =
         Undo ->
             ( model
             , send model.server
-                <| UndoReq { gameid = model.gameid }
+                <| UndoReq { playerid = getPlayerid model }
             )
         NodeClick kind which node ->
             case kind of
                 SetupBoardClick ->
                     ( model
                     , send model.server
-                        <| SelectPlacementReq { gameid = model.gameid
+                        <| SelectPlacementReq { playerid = getPlayerid model
                                               , node = node.name
                                               }
                     )
                 EmptyBoardClick ->
                     ( model
                     , send model.server
-                        <| PlaceReq { gameid = model.gameid
+                        <| PlaceReq { playerid = getPlayerid model
                                     , node = node.name
                                     }
                     )
                 OtherPlayerClick ->
                     ( model
                     , send model.server
-                        <| EndTurnReq { gameid = model.gameid }
+                        <| EndTurnReq { playerid = getPlayerid model }
                     )
                 ChooseActorClick ->
                     ( model
                     , send model.server
-                        <| SelectActorReq { gameid = model.gameid
+                        <| SelectActorReq { playerid = getPlayerid model
                                           , node = node.name
                                           }
                     )
                 ChooseSubjectClick ->
                     ( model
                     , send model.server
-                        <| SelectSubjectReq { gameid = model.gameid
+                        <| SelectSubjectReq { playerid = getPlayerid model
                                             , node = node.name
                                             }
                     )
                 ChooseTargetClick ->
                     ( model
                     , send model.server
-                        <| MoveReq { gameid = model.gameid
+                        <| MoveReq { playerid = getPlayerid model
                                    , node = node.name
                                    }
                     )
@@ -352,8 +360,8 @@ printGameState gs =
 printMessage : Message -> String
 printMessage message =
     case message of
-        JoinRsp {gameid, names, gameState} ->
-            "JoinRsp, gameid: " ++ gameid ++
+        JoinRsp {playerid, names, gameState} ->
+            "JoinRsp, playerid: " ++ playerid ++
                 ", names: (" ++ names.white ++ ", " ++ names.black ++
                 "), " ++ (printGameState gameState)
         UpdateRsp {gameid, gameState} ->
@@ -424,25 +432,32 @@ serverMessage si message model =
         ignore = log "message" <| printMessage message
     in
         case message of
-            NewRsp { gameid } ->
+            NewRsp { gameid, playerid } ->
                 ( { mod
                       | gameid = gameid
+                      , playerid = playerid
                   }
-                -- This will be Cmd.none when we're in remote mode
-                , send mod.server
-                    <| JoinReq { gameid = gameid
-                               , name = "Black"
-                               }
+                , if model.isRemote then
+                      Cmd.none
+                  else
+                      send mod.server
+                          <| JoinReq { gameid = gameid
+                                     , name = "Black"
+                                     }
                 )
             _ ->
                 let m2 = case message of
-                             JoinRsp { gameid, names, gameState } ->
-                                 { mod
-                                     | gameid = gameid
-                                     , gs = gameState
-                                     , names = names
-                                     , nodeSelections = calculateSelections gameState
-                                 }
+                             JoinRsp { playerid, names, gameState } ->
+                                 let m3 = if model.isRemote then
+                                              { mod | playerid = playerid }
+                                          else
+                                              { mod | otherPlayerid = playerid }
+                                 in
+                                     { m3
+                                         | gs = gameState
+                                         , names = names
+                                         , nodeSelections = calculateSelections gameState
+                                     }
                              UpdateRsp { gameState } ->
                                  let gs = if model.isRemote then
                                               Board.addAnalysis gameState
