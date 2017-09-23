@@ -492,13 +492,6 @@ printMessage message =
 
 calculateSelections : Model -> GameState -> List NodeSelection
 calculateSelections model gs =
-    if model.isRemote && (model.you /= gs.player) then
-        []
-    else
-        calculateSelectionsInternal gs
-
-calculateSelectionsInternal : GameState -> List NodeSelection
-calculateSelectionsInternal gs =
     let moves = gs.analysis.moves
     in
         case gs.mode of
