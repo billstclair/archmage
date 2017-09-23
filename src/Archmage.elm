@@ -110,7 +110,9 @@ setMessage model =
                                   Just message
                               else
                                   Just "Waiting for server to respond."
-                          else if model.you /= gs.player then
+                          else if model.you /= gs.player &&
+                                  gs.mode /= GameOverMode
+                          then
                               let dowhat = if gs.mode == SetupMode then
                                                "place a piece."
                                            else
