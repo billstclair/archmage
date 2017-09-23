@@ -62,6 +62,7 @@ type Msg
     | SetChatSize Int
     | SetName String
     | SetGameid String
+    | ReceiveServerUrl (String -> Model -> (Model, Cmd Msg)) (Result Http.Error String)
     | NewGame
     | SetIsRemote Bool
     | SetIsPublic Bool

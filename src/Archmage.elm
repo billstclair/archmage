@@ -50,6 +50,7 @@ import List.Extra as LE
 import Task
 import Window
 import WebSocket
+import Http
 import Debug exposing ( log )
 
 main =
@@ -67,7 +68,8 @@ subscriptions model =
     else
         Sub.batch
             [ WebSocket.listen
-                  (Interface.getServer model.server) WebSocketMessage
+                  (Interface.getServer model.server)
+                  WebSocketMessage
             , Window.resizes WindowSize
             ]
 {-
@@ -84,7 +86,8 @@ targetSelectionColor = "red"
 
 messages : List (Mode, String)
 messages =
-    [ (SetupMode, "select and place a piece.")
+    [ (JoinMode, "Waiting for other player to join.")
+    , (SetupMode, "select and place a piece.")
     , (ChooseActorMode, "click a " ++ actorSelectionColor
            ++ " actor.")
     , (ChooseSubjectMode, "click a " ++ subjectSelectionColor
@@ -129,13 +132,18 @@ setMessage model =
                                    "no moves possible. Undo or End Turn."
                            else
                                message
-                    msg = if gs.mode == GameOverMode then
-                              if analysis.noNonKoMoves && analysis.otherNoNonKoMoves then
-                                  "Game Over! Ends in Ko for both players."
-                              else
+                    msg = case gs.mode of
+                              JoinMode ->
                                   message
-                          else
-                              c ++ msg2
+                              GameOverMode ->
+                                  if analysis.noNonKoMoves &&
+                                      analysis.otherNoNonKoMoves
+                                  then
+                                      "Game Over! Ends in Ko for both players."
+                                  else
+                                      message
+                              _ ->
+                                  c ++ msg2
                 in
                     { model | message = Just <| msg }
 
@@ -221,13 +229,69 @@ getPlayerid model =
     else
         model.otherPlayerid
 
+connect : String -> Model -> (Model, Cmd Msg)
+connect rawUrl model =
+    let url = String.trim rawUrl
+        server = makeServer url Noop
+        rsres = case model.restoreState of
+                    "" ->
+                        Ok Nothing
+                    json ->
+                        case decodeGameState json of
+                            Err msg ->
+                                Err msg
+                            Ok rs ->
+                                Ok <| Just rs
+        gs = initialGameState False
+    in
+        case rsres of
+            Err msg ->
+                ( { model | message = Just msg }
+                , Cmd.none
+                )
+            Ok rs ->
+                ( { model
+                      | isRemote = True
+                      , server = server
+                      , message = Just <| "Connecting to " ++ url
+                      , gs = { gs | mode = JoinMode }
+                  }
+                , send server
+                    <| NewReq { name = model.names.white
+                              , isPublic = model.isPublic
+                              , restoreState = rs
+                              }
+                )
+
 updateInternal : Msg -> Model -> ( Model, Cmd Msg )
 updateInternal msg model =
     case msg of
         NewGame ->
-            init Nothing
+            if model.newIsRemote then
+                ( model
+                , Http.send (ReceiveServerUrl connect)
+                    <| Http.getString "server.txt"
+                )
+            else
+                init Nothing
+        ReceiveServerUrl handler result ->
+            case result of
+                Err msg ->
+                    ( { model | message = Just (toString msg) }
+                    , Cmd.none
+                    )
+                Ok url ->
+                    handler url model
         ServerMessage si message ->
             serverMessage si message model
+        WebSocketMessage string ->
+            case decodeMessage string of
+                Err err ->
+                    ( { model | message = Just err }
+                    , Cmd.none
+                    )
+                Ok message ->
+                    serverMessage model.server message model
         SetIsRemote isRemote ->
             ( { model | newIsRemote = isRemote }
             , Cmd.none
@@ -360,6 +424,9 @@ printGameState gs =
 printMessage : Message -> String
 printMessage message =
     case message of
+        NewRsp {gameid, playerid, name} ->
+            "NewRsp, gameid: " ++ gameid ++ ", playerid: " ++ playerid ++
+                ", name: " ++ name
         JoinRsp {playerid, names, gameState} ->
             "JoinRsp, playerid: " ++ playerid ++
                 ", names: (" ++ names.white ++ ", " ++ names.black ++
@@ -747,17 +814,18 @@ renderGamePage : Model -> Html Msg
 renderGamePage model =
     let renderInfo = case model.renderInfo of
                          Nothing ->
-                             Board.renderInfo pieceSize
+                             Board.renderInfo <| log "defaultRenderInfo" pieceSize
                          Just ri ->
                              ri
         cellSize = renderInfo.cellSize
         locations = renderInfo.locations
         gs = model.gs
-        listCellSize = if gs.mode == SetupMode then
-                           renderInfo.setupCellSize
-                       else
-                           renderInfo.captureCellSize
+        listCellSize = case gs.mode of
+                           JoinMode -> renderInfo.setupCellSize
+                           SetupMode -> renderInfo.setupCellSize
+                           _ -> renderInfo.captureCellSize
         setupLocations = case gs.mode of
+                             JoinMode -> renderInfo.setupLineLocations
                              SetupMode -> renderInfo.setupLineLocations
                              _ -> renderInfo.captureLineLocations
         sels = model.nodeSelections
@@ -772,12 +840,13 @@ renderGamePage model =
                 _ ->
                     ([], sels, [])
         modNodeMsg = nodeMsg model
-        bsb = (\b ->
-                   b --stringToBoard <| boardToString b
-              )
-        tl = bsb gs.topList
-        b  = bsb gs.board
-        bl = bsb gs.bottomList
+        isJoin = gs.mode == JoinMode
+        tl = gs.topList
+        b  = gs.board
+        bl = if isJoin then
+                 Board.blankSetupBoard
+             else
+                 gs.bottomList
         remote = model.newIsRemote
         public = model.isPublic
     in

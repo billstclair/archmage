@@ -100,7 +100,7 @@ update message model =
     Connection socket ->
       ( model, Cmd.none )
     Disconnection socket ->
-        disconnection True model socket
+        disconnection model socket
     SocketMessage socket message ->
         socketMessage model socket message
     Tick time ->
@@ -118,7 +118,7 @@ removeField value accessor records =
 killGame : Model -> String -> Model
 killGame model gameid =
     let state = model.state
-        playerDict = case Dict.get gameid model.playeridDict of
+        playerDict = case Dict.get (log "killgame" gameid) model.playeridDict of
                          Nothing ->
                              state.playerDict
                          Just ids ->
@@ -133,8 +133,8 @@ killGame model gameid =
             , playeridDict = Dict.remove gameid model.playeridDict
         }
 
-disconnection : Bool -> Model -> Socket -> (Model, Cmd Msg)
-disconnection kill model socket =
+disconnection : Model -> Socket -> (Model, Cmd Msg)
+disconnection model socket =
     case Dict.get socket model.gameidDict of
         Nothing ->
             (model, Cmd.none)
@@ -148,7 +148,7 @@ disconnection kill model socket =
                     Just sockets ->
                         let socks = List.filter (\s -> s /= socket) sockets
                         in
-                            ( if kill && socks == [] then
+                            ( if socks == [] then
                                   -- Probably should put a delay here,
                                   -- in case both players lose their connection
                                   -- at the same time, but come back
@@ -242,7 +242,7 @@ processResponse : Model -> Socket -> ServerState -> Message -> Message -> (Model
 processResponse model socket state message response =
     case response of
         (NewRsp { gameid, playerid, name }) ->
-            let (model2, _) = disconnection False model socket
+            let (model2, _) = disconnection model socket
                 (gid, model3) = newGameid model2
                 state2 = case Dict.get gameid state.gameDict of
                              Nothing ->
@@ -285,7 +285,7 @@ processResponse model socket state message response =
                     , sendToOne (errorRsp message "Can't find gameid") socket
                     )
                 Just gameid ->
-                    let (model2, _) = disconnection False model socket
+                    let (model2, _) = disconnection model socket
                         sockets = case Dict.get gameid model2.socketsDict of
                                       Nothing -> [] --better not happen
                                       Just socks -> socks

@@ -11,8 +11,8 @@
 
 module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, render
                                , isEmptyBoard, isPlayMode, addAnalysis
-                               , whiteSetupBoard, blackSetupBoard, isSetupBoard
-                               , initialCaptureBoard
+                               , whiteSetupBoard, blackSetupBoard, blankSetupBoard
+                               , isSetupBoard, initialCaptureBoard
                                , centerHoleName, centerHolePiece, centerHoleNode
                                , getNode, setNode
                                , stringToBoard, boardToString, runLengthDecode
@@ -154,13 +154,17 @@ setupList : List (Int, String, Piece)
 setupList =
     List.map2 (\j p -> (j, pieceToString p, p)) indices pieceList
 
-makeSetupBoard : Color -> Board
+makeSetupBoard : Maybe Color -> Board
 makeSetupBoard color =
     let nodes = Dict.fromList
                 <| List.map (\(j, a, p) -> (a, { name = a
                                                , row = 0
                                                , column = j
-                                               , piece = Just (color, p)
+                                               , piece = case color of
+                                                             Nothing ->
+                                                                 Nothing
+                                                             Just c ->
+                                                                 Just (c, p)
                                                }
                                            )
                             )
@@ -173,11 +177,15 @@ makeSetupBoard color =
 
 whiteSetupBoard : Board
 whiteSetupBoard =
-    makeSetupBoard White
+    makeSetupBoard (Just White)
 
 blackSetupBoard : Board
 blackSetupBoard =
-    makeSetupBoard Black
+    makeSetupBoard (Just Black)
+
+blankSetupBoard : Board
+blankSetupBoard =
+    makeSetupBoard Nothing
 
 isSetupBoard : Board -> Bool
 isSetupBoard board =

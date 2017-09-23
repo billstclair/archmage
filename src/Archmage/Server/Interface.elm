@@ -201,7 +201,9 @@ checkGameid state message gameid modes =
             else
                 Err
                 <| errorRsp message
-                    ("Not " ++ (modeToString gameState.mode) ++ " mode")
+                    ("Mode is " ++ (toString gameState.mode) ++
+                         ", not " ++ (toString modes)
+                    )
         err ->
             err
 
