@@ -12,7 +12,7 @@
 module Archmage.Server.Interface exposing ( emptyServerState
                                           , makeProxyServer, makeServer, send
                                           , getServer, fillinModel
-                                          , processServerMessage
+                                          , processServerMessage, errorRsp
                                           )
 
 import Archmage.Server.EncodeDecode exposing ( encodeMessage, modeToString )
@@ -40,7 +40,6 @@ emptyServerState : ServerState
 emptyServerState =
     { gameDict = Dict.empty
     , playerDict = Dict.empty
-    , names = initialPlayerNames
     , publicGames = emptyPublicGames
     }
 
@@ -132,7 +131,6 @@ fillinServer model =
                                            }
                                          )
                                        ]
-                               , names = model.names
                                , publicGames = []
                                }
                            , sender = proxySender
@@ -314,7 +312,6 @@ newReqInternal state message name isPublic restoreState =
                       Dict.insert gameid gs state.gameDict
                   , playerDict =
                       Dict.insert playerid playerInfo state.playerDict
-                  , names = { initialPlayerNames | white = name }
                   , publicGames =
                     if isPublic then
                         appendGameList state.publicGames
@@ -383,8 +380,7 @@ joinMode gameState =
 
 joinReq : ServerState -> GameState -> Message -> String -> String -> (ServerState, Message)
 joinReq state gameState message gameid name =
-    let names = state.names
-        nms = { names | black = name }
+    let names = { initialPlayerNames | black = name }
         mode = joinMode gameState
         gs = Board.addAnalysis
              { gameState
@@ -404,13 +400,12 @@ joinReq state gameState message gameid name =
                      , player = BlackPlayer
                      }
         msg = JoinRsp { playerid = playerid
-                      , names = nms
+                      , names = names
                       , gameState = gs
                       }
         st2 = { state
                   | gameDict = Dict.insert gameid gs state.gameDict
                   , playerDict = Dict.insert playerid playerInfo state.playerDict
-                  , names = nms
                   , publicGames =
                       removeGameFromList state.publicGames gameid
               }

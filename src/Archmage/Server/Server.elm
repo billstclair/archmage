@@ -2,11 +2,12 @@ port module Server exposing (..)
 
 import Archmage.Server.EncodeDecode exposing ( encodeMessage, decodeMessage )
 import Archmage.Server.Interface exposing ( emptyServerState, send
-                                          , processServerMessage
+                                          , processServerMessage, errorRsp
                                           )
 import Archmage.Server.Error exposing ( ServerError(..), errnum )
-import Archmage.Types exposing ( Message(..), ServerState, PublicGames
-                               , noMessage
+import Archmage.Types exposing ( Message(..), ServerState, PublicGames, PlayerNames
+                               , Player(..)
+                               , noMessage, initialPlayerNames
                                )
 
 import Platform exposing ( Program )
@@ -39,6 +40,8 @@ port outputPort : Encode.Value -> Cmd msg
 type alias Model =
     { state : ServerState
     , gameidDict : Dict Socket String --Socket -> gameid
+    , playeridDict : Dict String (List String) --gameid -> List playerid
+    , namesDict : Dict String PlayerNames      --gameid -> PlayerNames
     , socketsDict : Dict String (List Socket) -- gameid -> List Socket
     , seed : Seed
     }
@@ -64,10 +67,18 @@ newGameid model =
         , { model | seed = seed }
         )
 
+newPlayerid : Model -> (String, Model)
+newPlayerid model =
+    let (gameid, mod) = newGameid model
+    in
+        ("P" ++ gameid, mod)
+
 init : ( Model, Cmd Msg )
 init =
     ( { state = emptyServerState
       , gameidDict = Dict.empty
+      , playeridDict = Dict.empty
+      , namesDict = Dict.empty
       , socketsDict = Dict.empty
       , seed = Random.initialSeed 0
       }
@@ -89,7 +100,7 @@ update message model =
     Connection socket ->
       ( model, Cmd.none )
     Disconnection socket ->
-        disconnection model socket
+        disconnection True model socket
     SocketMessage socket message ->
         socketMessage model socket message
     Tick time ->
@@ -100,28 +111,30 @@ update message model =
             )
     Noop -> (model, Cmd.none)
 
-removeFromPublicGames : ServerState -> String -> ServerState
-removeFromPublicGames state gameid =
-    let games = state.publicGames
-        filter = (\game -> game.gameid /= gameid)
-    in
-        { state
-            | publicGames = List.filter filter games
-        }
+removeField : value -> (record -> value) -> List record -> List record
+removeField value accessor records =
+    List.filter (\record -> accessor record /= value) records
 
 killGame : Model -> String -> Model
 killGame model gameid =
-    let state = removeFromPublicGames model.state gameid
-        gameDict = state.gameDict
+    let state = model.state
+        playerDict = case Dict.get gameid model.playeridDict of
+                         Nothing ->
+                             state.playerDict
+                         Just ids ->
+                             List.foldl Dict.remove state.playerDict ids
     in
-        { model |
-              state = { state
-                          | gameDict = Dict.remove gameid gameDict
+        { model
+            | state = { state
+                          | gameDict = Dict.remove gameid state.gameDict
+                          , playerDict = playerDict
+                          , publicGames = removeField gameid .gameid state.publicGames
                       }
+            , playeridDict = Dict.remove gameid model.playeridDict
         }
 
-disconnection : Model -> Socket -> (Model, Cmd Msg)
-disconnection model socket =
+disconnection : Bool -> Model -> Socket -> (Model, Cmd Msg)
+disconnection kill model socket =
     case Dict.get socket model.gameidDict of
         Nothing ->
             (model, Cmd.none)
@@ -135,7 +148,10 @@ disconnection model socket =
                     Just sockets ->
                         let socks = List.filter (\s -> s /= socket) sockets
                         in
-                            ( if socks == [] then
+                            ( if kill && socks == [] then
+                                  -- Probably should put a delay here,
+                                  -- in case both players lose their connection
+                                  -- at the same time, but come back
                                   killGame { model2
                                                | socketsDict =
                                                    Dict.remove gameid socketsDict
@@ -161,6 +177,15 @@ sendToMany message sockets =
         (log "send" (encodeMessage message))
         (log "  " sockets)
         |> Cmd.batch
+
+messageGameid : Message -> Maybe String
+messageGameid message =
+    case message of
+        NewRsp { gameid } -> Just gameid
+        JoinReq { gameid } -> Just gameid
+        UpdateRsp { gameid } -> Just gameid
+        ChatRsp { gameid } -> Just gameid
+        _ -> Nothing
 
 socketMessage : Model -> Socket -> String -> (Model, Cmd Msg)
 socketMessage model socket request =
@@ -194,12 +219,31 @@ updatePublicGameId games gameid gid =
                 { game | gameid = gid }
                 :: (List.filter (\game -> game.gameid /= gameid) gameList)
 
+updatePlayerid : String -> String -> Player -> Model -> (Model, String)
+updatePlayerid gameid playerid player model =
+    let (pid, model2) = newPlayerid model
+        state = model2.state
+        ids = case Dict.get gameid model2.playeridDict of
+                  Nothing -> [pid]
+                  Just ids -> pid :: ids
+        playeridDict = Dict.insert gameid ids model2.playeridDict
+        info = { gameid = gameid, player = player }
+        playerDict = Dict.insert pid info
+                     <| Dict.remove playerid state.playerDict
+    in
+        ( { model2
+              | state = { state | playerDict = playerDict }
+              , playeridDict = playeridDict
+          }
+        , pid
+        )
+
 processResponse : Model -> Socket -> ServerState -> Message -> Message -> (Model, Cmd Msg)
 processResponse model socket state message response =
     case response of
-        (NewRsp { gameid, name }) ->
-            let (model2, _) = disconnection model socket
-                (gid, model4) = newGameid model2
+        (NewRsp { gameid, playerid, name }) ->
+            let (model2, _) = disconnection False model socket
+                (gid, model3) = newGameid model2
                 state2 = case Dict.get gameid state.gameDict of
                              Nothing ->
                                  state --can't happen
@@ -214,38 +258,56 @@ processResponse model socket state message response =
                                              updatePublicGameId state.publicGames
                                                  gameid gid
                                      }
-                model5 = { model4
+                model4 = { model3
                              | state = state2
                              , gameidDict =
-                                 Dict.insert socket gid model4.gameidDict
+                                 Dict.insert socket gid model3.gameidDict
                              , socketsDict =
-                                 Dict.insert gid [socket] model4.socketsDict
+                                 Dict.insert gid [socket] model3.socketsDict
+                             , namesDict =
+                                 Dict.insert gid
+                                     { initialPlayerNames | white = name }
+                                     model3.namesDict
                          }
+                (model5, pid) = updatePlayerid gid playerid WhitePlayer model4
                 response = NewRsp { gameid = gid
+                                  , playerid = pid
                                   , name = name
                                   }
             in
                 ( model5
                 , sendToOne response socket
                 )
-        JoinRsp { gameid, names, gameState } ->
-             let (model3, _) = disconnection model socket
-                 sockets = case Dict.get gameid model3.socketsDict of
-                               Nothing -> [] --can't happen
-                               Just socks -> socks
-                 newSockets = socket :: sockets
-                 model4 = { model3
-                              | state = state
-                              , gameidDict =
-                                  Dict.insert socket gameid model3.gameidDict
-                              , socketsDict =
-                                  Dict.insert gameid newSockets
-                                      model3.socketsDict
-                          }
-                 rsp = JoinRsp { gameid = gameid
-                               , names = names
-                               , gameState = gameState
-                               }
+        JoinRsp { playerid, names, gameState } ->
+            case messageGameid message of
+                Nothing ->
+                    ( model
+                    , sendToOne (errorRsp message "Can't find gameid") socket
+                    )
+                Just gameid ->
+                    let (model2, _) = disconnection False model socket
+                        sockets = case Dict.get gameid model2.socketsDict of
+                                      Nothing -> []
+                                      Just socks -> socks
+                        newSockets = socket :: sockets
+                        newNames = case Dict.get gameid model.namesDict of
+                                       Nothing -> names
+                                       Just nms ->
+                                           { nms | black = names.black }
+                        model3 = { model2
+                                     | state = state
+                                     , gameidDict =
+                                       Dict.insert socket gameid model2.gameidDict
+                                     , socketsDict =
+                                       Dict.insert gameid newSockets model2.socketsDict
+                                     , namesDict =
+                                       Dict.insert gameid newNames model2.namesDict
+                                 }
+                        (model4, pid) = updatePlayerid gameid playerid BlackPlayer model3
+                        rsp = JoinRsp { playerid = pid
+                                      , names = newNames
+                                      , gameState = gameState
+                                      }
              in
                  ( model4
                  , sendToMany rsp newSockets
@@ -260,11 +322,10 @@ processResponse model socket state message response =
                         Just gid ->
                             (gid, model)
                         Nothing ->
-                            let gid = responseGameid response
-                            in
-                                if gid == "" then
-                                    (gid, model)
-                                else
+                            case messageGameid response of
+                                Nothing ->
+                                    ("", model) --I don't think this can happen
+                                Just gid ->
                                     let socks =
                                         case Dict.get gid model.socketsDict of
                                             Nothing -> [socket]
@@ -289,15 +350,6 @@ processResponse model socket state message response =
                 ( { model2 | state = state }
                 , sendToMany response sockets
                 )
-
-responseGameid : Message -> String
-responseGameid message =
-    case message of
-        NewRsp { gameid } -> gameid
-        JoinRsp { gameid } -> gameid
-        UpdateRsp { gameid } -> gameid
-        ChatRsp { gameid } -> gameid
-        _ -> ""
 
 -- SUBSCRIPTIONS
 

@@ -445,10 +445,15 @@ type alias PlayerInfo =
     , player : Player
     }
 
+-- You might think that the names are per game, and you'd be right to think that.
+-- They're not in the GameState, because they don't need to go over the wire,
+-- except in the JoinRsp.
+-- So I'm relying on the fact that Node.js is single-threaded to stash them there
+-- during the NewReq and JoinReq calls.
+-- They're stored in a Dict in the Server model.
 type alias ServerState =
     { gameDict : Dict String GameState --gameid -> GameState
     , playerDict : Dict String PlayerInfo --playerid -> PlayerInfo
-    , names : PlayerNames
     , publicGames : PublicGames
     }
 
