@@ -11,7 +11,7 @@
 
 module Archmage.Board exposing ( initialGameState, initialBoard, renderInfo, render
                                , isEmptyBoard, isPlayMode, addAnalysis
-                               , whiteSetupBoard, blackSetupBoard, blankSetupBoard
+                               , whiteSetupBoard, blackSetupBoard, emptySetupBoard
                                , isSetupBoard, initialCaptureBoard
                                , centerHoleName, centerHolePiece, centerHoleNode
                                , getNode, setNode
@@ -183,8 +183,8 @@ blackSetupBoard : Board
 blackSetupBoard =
     makeSetupBoard (Just Black)
 
-blankSetupBoard : Board
-blankSetupBoard =
+emptySetupBoard : Board
+emptySetupBoard =
     makeSetupBoard Nothing
 
 isSetupBoard : Board -> Bool

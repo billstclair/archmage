@@ -35,7 +35,7 @@ import Archmage.Server.EncodeDecode
              , encodeMessage, decodeMessage
              )
 import Archmage.Server.Interface as Interface
-    exposing ( makeProxyServer, makeServer, send )
+    exposing ( makeProxyServer, makeServer, send, dummyGameid )
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span
                      , input
@@ -78,7 +78,7 @@ A few words about end of game.
 
 -}
 
-placementSelectionColor = "black"
+placementSelectionColor = "blue"
 otherPlayerSelectionColor = "orange"
 actorSelectionColor = "green"
 subjectSelectionColor = "blue"
@@ -105,47 +105,70 @@ setMessage model =
             Nothing ->
                 model
             Just message ->
-                let c = case gs.player of
-                            WhitePlayer -> "White, "
-                            BlackPlayer -> "Black, "
-                    analysis = gs.analysis
-                    msg2 = if analysis.noNonKoMoves then
-                               if analysis.otherNoNonKoMoves then
-                                   "Ends in Ko for both players. Undo."
-                               else
-                                   let suffix = if gs.isFirstMove then
-                                                    "Click \"End Turn\"."
-                                                else
-                                                    "Undo or End Turn."
-                                   in
-                                       "Ends in Ko. " ++ suffix
-                           else if gs.mode == ChooseActorMode
-                                   && Dict.isEmpty analysis.moves
-                           then
-                               if analysis.otherNoNonKoMoves then
-                                   "other player has no non-Ko moves. Undo."
-                               else if gs.isFirstMove then
-                                   "no moves are possible. Click \"End Turn\"."
-                               else if analysis.isKo then
-                                   "in Ko and no moves possible. Undo."
-                               else
-                                   "no moves possible. Undo or End Turn."
-                           else
-                               message
-                    msg = case gs.mode of
-                              JoinMode ->
-                                  message
-                              GameOverMode ->
-                                  if analysis.noNonKoMoves &&
-                                      analysis.otherNoNonKoMoves
-                                  then
-                                      "Game Over! Ends in Ko for both players."
-                                  else
-                                      message
-                              _ ->
-                                  c ++ msg2
+                let msg = if gs.mode == JoinMode then
+                              if model.you == WhitePlayer then
+                                  Just message
+                              else
+                                  Just "Waiting for server to respond."
+                          else if model.you /= gs.player then
+                              let dowhat = if gs.mode == SetupMode then
+                                               "place a piece."
+                                           else
+                                               "finish the turn."
+                              in
+                                  Just <| "Wait for the other player to " ++ dowhat
+                          else
+                              Nothing
                 in
-                    { model | message = Just <| msg }
+                    case msg of
+                        Nothing ->
+                            setMessageInternal model gs message
+                        Just msg ->
+                            { model | message = Just msg }
+
+setMessageInternal : Model -> GameState -> String -> Model
+setMessageInternal model gs message =
+    let c = case gs.player of
+                WhitePlayer -> "White, "
+                BlackPlayer -> "Black, "
+        analysis = gs.analysis
+        msg2 = if analysis.noNonKoMoves then
+                   if analysis.otherNoNonKoMoves then
+                       "Ends in Ko for both players. Undo."
+                   else
+                       let suffix = if gs.isFirstMove then
+                                        "Click \"End Turn\"."
+                                    else
+                                        "Undo or End Turn."
+                       in
+                           "Ends in Ko. " ++ suffix
+               else if gs.mode == ChooseActorMode
+                   && Dict.isEmpty analysis.moves
+               then
+                   if analysis.otherNoNonKoMoves then
+                       "other player has no non-Ko moves. Undo."
+                   else if gs.isFirstMove then
+                       "no moves are possible. Click \"End Turn\"."
+                   else if analysis.isKo then
+                       "in Ko and no moves possible. Undo."
+                   else
+                       "no moves possible. Undo or End Turn."
+                    else
+                        message
+        msg = case gs.mode of
+                  JoinMode ->
+                      message
+                  GameOverMode ->
+                      if analysis.noNonKoMoves &&
+                          analysis.otherNoNonKoMoves
+                      then
+                          "Game Over! Ends in Ko for both players."
+                      else
+                          message
+                  _ ->
+                      c ++ msg2
+    in
+        { model | message = Just msg }
 
 initialPlacementSelections : Player -> Model -> List NodeSelection
 initialPlacementSelections player model =
@@ -186,7 +209,7 @@ init maybeModel =
                             , you = WhitePlayer
                             , names = initialPlayerNames
                             , windowSize = Nothing
-                            , newIsRemote = False
+                            , newIsRemote = True
                             , otherPlayerid = ""
                             }
                   in
@@ -252,6 +275,7 @@ connect rawUrl model =
             Ok rs ->
                 ( { model
                       | isRemote = True
+                      , you = WhitePlayer
                       , server = server
                       , message = Just <| "Connecting to " ++ url
                       , gs = { gs | mode = JoinMode }
@@ -263,14 +287,36 @@ connect rawUrl model =
                               }
                 )
 
+join : String -> Model -> (Model, Cmd Msg)
+join rawUrl model =
+    let url = String.trim rawUrl
+        server = makeServer url Noop
+        gs = initialGameState False
+    in
+        ( { model
+              | isRemote = True
+              , server = server
+              , message = Just <| "Joining " ++ url
+              , gs = { gs | mode = JoinMode }
+              , you = BlackPlayer
+          }
+        , send server
+            <| JoinReq { gameid = model.gameid
+                       , name = model.names.black
+                       }
+        )
+
+getServerText : Http.Request String
+getServerText =
+    Http.getString "server.txt"
+
 updateInternal : Msg -> Model -> ( Model, Cmd Msg )
 updateInternal msg model =
     case msg of
         NewGame ->
             if model.newIsRemote then
                 ( model
-                , Http.send (ReceiveServerUrl connect)
-                    <| Http.getString "server.txt"
+                , Http.send (ReceiveServerUrl connect) getServerText
                 )
             else
                 init Nothing
@@ -282,6 +328,14 @@ updateInternal msg model =
                     )
                 Ok url ->
                     handler url model
+        SetGameid gameid ->
+            ( { model | gameid = gameid }
+            , Cmd.none
+            )
+        JoinGame ->
+            ( model
+            , Http.send (ReceiveServerUrl join) getServerText
+            )
         ServerMessage si message ->
             serverMessage si message model
         WebSocketMessage string ->
@@ -436,8 +490,15 @@ printMessage message =
         _ ->
             encodeMessage message
 
-calculateSelections : GameState -> List NodeSelection
-calculateSelections gs =
+calculateSelections : Model -> GameState -> List NodeSelection
+calculateSelections model gs =
+    if model.isRemote && (model.you /= gs.player) then
+        []
+    else
+        calculateSelectionsInternal gs
+
+calculateSelectionsInternal : GameState -> List NodeSelection
+calculateSelectionsInternal gs =
     let moves = gs.analysis.moves
     in
         case gs.mode of
@@ -515,7 +576,9 @@ serverMessage si message model =
             _ ->
                 let m2 = case message of
                              JoinRsp { playerid, names, gameState } ->
-                                 let m3 = if model.isRemote then
+                                 let m3 = if playerid == "" then
+                                              mod
+                                          else if model.isRemote then
                                               { mod | playerid = playerid }
                                           else
                                               { mod | otherPlayerid = playerid }
@@ -523,7 +586,8 @@ serverMessage si message model =
                                      { m3
                                          | gs = gameState
                                          , names = names
-                                         , nodeSelections = calculateSelections gameState
+                                         , nodeSelections =
+                                             calculateSelections m3 gameState
                                      }
                              UpdateRsp { gameState } ->
                                  let gs = if model.isRemote then
@@ -533,7 +597,7 @@ serverMessage si message model =
                                  in
                                      { mod
                                          | gs = gs
-                                         , nodeSelections = calculateSelections gs
+                                         , nodeSelections = calculateSelections mod gs
                                      }
                              GamesRsp games ->
                                  mod
@@ -600,7 +664,8 @@ nodeMsg model board node =
                                 if model.gs.isFirstMove then
                                     Nothing
                                 else
-                                    Just otherPlayerClick
+                                    --Just otherPlayerClick
+                                    Nothing
                             _ ->
                                 case findSelection name model of
                                     Nothing ->
@@ -665,9 +730,10 @@ endTurnButton model =
         button [ onClick <| otherPlayerClick
                -- Will eventually be disabled during Ko
                , disabled
-                     <| (not playMode) || isKo ||
-                         (gs.isFirstMove && hasMoves) ||
-                         otherKo
+                     <| (not playMode) ||
+                        isKo ||
+                        (gs.isFirstMove && hasMoves) ||
+                        otherKo
                , title <| if isKo then
                               "The board is in a position it has been in before. You may not end your turn now."
                           else if otherKo then
@@ -839,16 +905,25 @@ renderGamePage model =
                             ([], [], sels)
                 _ ->
                     ([], sels, [])
-        modNodeMsg = nodeMsg model
         isJoin = gs.mode == JoinMode
-        tl = gs.topList
+        tl = if isJoin && model.you == BlackPlayer then
+                 Board.emptySetupBoard
+             else
+                 gs.topList
         b  = gs.board
-        bl = if isJoin then
-                 Board.blankSetupBoard
+        bl = if isJoin && model.you == WhitePlayer then
+                 Board.emptySetupBoard
              else
                  gs.bottomList
-        remote = model.newIsRemote
+        isRemote = model.isRemote
+        newIsRemote = model.newIsRemote
         public = model.isPublic
+        gameid = model.gameid
+        joinMode = gs.mode == JoinMode
+        modNodeMsg = if (isRemote && model.you /= gs.player) then
+                         (\board node -> Nothing)
+                     else
+                         nodeMsg model
     in
         div []
             [ Board.render
@@ -860,12 +935,34 @@ renderGamePage model =
             , Board.render
                 bl False setupLocations listCellSize botsel modNodeMsg
             , p []
-                [ checkbox "remote" remote False SetIsRemote
+                [ checkbox "remote" newIsRemote False SetIsRemote
                 , text " "
-                , checkbox "public" public (not remote) SetIsPublic
+                , checkbox "public" public (not newIsRemote) SetIsPublic
                 , text " "
                 , button [ onClick NewGame ]
                       [ text "New Game" ]
+                , if newIsRemote || (isRemote && joinMode)
+                  then
+                      span []
+                          [ br
+                          , text "Game ID: "
+                          , input [ type_ "text"
+                                  , onInput SetGameid
+                                  , size 16
+                                  , disabled joinMode
+                                  , value <| if gameid == dummyGameid then
+                                                 ""
+                                             else
+                                                 gameid
+                                  ]
+                              [ ]
+                          , button [ onClick JoinGame
+                                   , disabled <| gs.mode == JoinMode
+                                   ]
+                              [ text "Join Game" ]
+                          ]
+                  else
+                      text ""
                 ]
             ]
 

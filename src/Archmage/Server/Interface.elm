@@ -13,6 +13,7 @@ module Archmage.Server.Interface exposing ( emptyServerState
                                           , makeProxyServer, makeServer, send
                                           , getServer, fillinModel
                                           , processServerMessage, errorRsp
+                                          , dummyGameid
                                           )
 
 import Archmage.Server.EncodeDecode exposing ( encodeMessage, modeToString )
