@@ -287,7 +287,7 @@ processResponse model socket state message response =
                 Just gameid ->
                     let (model2, _) = disconnection False model socket
                         sockets = case Dict.get gameid model2.socketsDict of
-                                      Nothing -> []
+                                      Nothing -> [] --better not happen
                                       Just socks -> socks
                         newSockets = socket :: sockets
                         newNames = case Dict.get gameid model.namesDict of
@@ -304,13 +304,22 @@ processResponse model socket state message response =
                                        Dict.insert gameid newNames model2.namesDict
                                  }
                         (model4, pid) = updatePlayerid gameid playerid BlackPlayer model3
-                        rsp = JoinRsp { playerid = pid
-                                      , names = newNames
-                                      , gameState = gameState
-                                      }
+                        rec = { playerid = pid
+                              , names = newNames
+                              , gameState = gameState
+                              }
+                        rsp = JoinRsp rec
+                        whiteRsp = JoinRsp { rec | playerid = "" }
              in
                  ( model4
-                 , sendToMany rsp newSockets
+                 , Cmd.batch
+                     [ sendToOne rsp socket
+                     , case sockets of
+                           [] ->
+                               Cmd.none
+                           s :: _ ->
+                               sendToOne whiteRsp s
+                     ]
                  )
         ErrorRsp _ ->
             ( model
