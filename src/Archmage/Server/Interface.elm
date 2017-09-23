@@ -212,6 +212,10 @@ playModes : List Mode
 playModes =
     [ChooseActorMode, ChooseSubjectMode, ChooseTargetMode]
 
+allModes : List Mode
+allModes =
+    JoinMode :: SetupMode :: GameOverMode :: playModes
+
 processServerMessage : ServerState -> Message -> (ServerState, Message)
 processServerMessage state message =
     case message of
@@ -224,6 +228,9 @@ processServerMessage state message =
                     (state, err)
                 Ok gameState ->
                     joinReq state gameState message gameid name
+        UpdateReq { playerid } ->
+            doGamePlay state message playerid allModes
+                (\gs -> Ok gs)
         SelectPlacementReq { playerid, node } ->
             doGamePlay state message playerid [SetupMode]
                 (\gameState -> selectPlacementReq gameState node)
@@ -335,6 +342,14 @@ newReqInternal state message name isPublic restoreState =
 type alias PlayFun =
     GameState -> Result String GameState
 
+isUpdateReq : Message -> Bool
+isUpdateReq message =
+    case message of
+        UpdateReq _ ->
+            True
+        _ ->
+            False
+
 doGamePlay : ServerState -> Message -> String -> List Mode -> PlayFun -> (ServerState, Message)
 doGamePlay state message playerid modes playFun =
     case checkPlayerid state message playerid of
@@ -345,7 +360,13 @@ doGamePlay state message playerid modes playFun =
                 Err err ->
                     (state, err)
                 Ok gameState ->
-                    if player /= gameState.player then
+                    if isUpdateReq message then
+                        ( state
+                        , UpdateRsp { gameid = gameid
+                                    , gameState = gameState
+                                    }
+                        )
+                    else if player /= gameState.player then
                         (state, errorRsp message "Wrong player.")
                     else
                         case playFun gameState of

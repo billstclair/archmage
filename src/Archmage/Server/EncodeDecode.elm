@@ -456,6 +456,12 @@ parseRequest msg params rawMessage =
                             JoinReq { gameid = gid
                                     , name = n
                                     }
+        "update" ->
+            case params.playerid of
+                Nothing ->
+                    rawMessage
+                Just pid ->
+                    UpdateReq { playerid = pid }
         -- Placement
         "selectPlacement" ->
             case params.playerid of
@@ -832,6 +838,8 @@ messageEncoder message =
                 , ("name", name) ]
         JoinReq { gameid, name } ->
             messageValue "req" "join" [ ("gameid", gameid), ("name", name) ]
+        UpdateReq { playerid } ->
+            messageValue "req" "update" [ ("playerid", playerid) ]
         JoinRsp { playerid, names, gameState } ->
             messageValue "rsp" "join"
                 [ ("playerid", playerid)

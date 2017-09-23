@@ -37,12 +37,21 @@ port outputPort : Encode.Value -> Cmd msg
 
 -- MODEL
 
+type alias DeathWatch =
+    ( Time, String )
+
+type alias DeathWatchGameids =
+    Dict String Bool
+
 type alias Model =
     { state : ServerState
     , gameidDict : Dict Socket String --Socket -> gameid
     , playeridDict : Dict String (List String) --gameid -> List playerid
     , namesDict : Dict String PlayerNames      --gameid -> PlayerNames
     , socketsDict : Dict String (List Socket) -- gameid -> List Socket
+    , deathWatch : List DeathWatch
+    , deathWatchGameids : DeathWatchGameids
+    , time : Time
     , seed : Seed
     }
 
@@ -80,9 +89,12 @@ init =
       , playeridDict = Dict.empty
       , namesDict = Dict.empty
       , socketsDict = Dict.empty
+      , deathWatch = []
+      , deathWatchGameids = Dict.empty
+      , time = 0
       , seed = Random.initialSeed 0
       }
-    , Task.perform Tick Time.now
+    , Task.perform FirstTick Time.now
     )
 
 -- UPDATE
@@ -91,24 +103,40 @@ type Msg
   = Connection WSS.Socket
   | Disconnection WSS.Socket
   | SocketMessage Socket String
+  | FirstTick Time
   | Tick Time
   | Noop
 
+maybeLog : Msg -> Msg
+maybeLog msg =
+    case msg of
+        Tick _ ->
+            msg
+        x ->
+            log "Msg" x
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update message model =
-  case (Debug.log "Msg" message) of
+  case maybeLog message of
     Connection socket ->
       ( model, Cmd.none )
     Disconnection socket ->
         disconnection model socket
     SocketMessage socket message ->
         socketMessage model socket message
-    Tick time ->
+    FirstTick time ->
         let seed = Random.initialSeed <| round time
         in
-            ( { model | seed = seed }
+            ( { model
+                  | time = time
+                  , seed = seed
+              }
             , Cmd.none
             )
+    Tick time ->
+        ( doExecutions { model | time = time }
+        , Cmd.none
+        )
     Noop -> (model, Cmd.none)
 
 removeField : value -> (record -> value) -> List record -> List record
@@ -133,6 +161,62 @@ killGame model gameid =
             , playeridDict = Dict.remove gameid model.playeridDict
         }
 
+deathRowDuration : Time
+deathRowDuration =
+    2 * Time.minute
+
+doExecutions : Model -> Model
+doExecutions model =
+    let time = model.time
+        loop = (\mod watches ->
+                    case watches of
+                        [] ->
+                            mod
+                        (tim, gid) :: tail ->
+                            if time >= tim then
+                                loop (killGame
+                                          { mod
+                                              | deathWatch = tail
+                                              , deathWatchGameids =
+                                                  Dict.remove gid mod.deathWatchGameids
+                                          }
+                                          gid)
+                                    tail
+                            else
+                                mod
+               )
+    in
+        loop model model.deathWatch
+
+deathWatch : String -> Model -> Model
+deathWatch gameid model =
+    let gameids = model.deathWatchGameids
+    in
+        case Dict.get (log "deathWatch" gameid) gameids of
+            Just _ ->
+                model
+            Nothing ->
+                { model
+                    | deathWatchGameids = Dict.insert gameid True gameids
+                    , deathWatch = List.append
+                      model.deathWatch
+                      [ (model.time + deathRowDuration, gameid) ]
+                }
+
+reprieve : String -> Model -> Model
+reprieve gameid model =
+    let gameids = model.deathWatchGameids
+    in
+        case Dict.get gameid gameids of
+            Nothing ->
+                model
+            Just _ ->
+                { model
+                    | deathWatchGameids = Dict.remove (log "reprieve" gameid) gameids
+                    , deathWatch =
+                        List.filter (\(_, gid) -> gid /= gameid) model.deathWatch
+                }
+
 disconnection : Model -> Socket -> (Model, Cmd Msg)
 disconnection model socket =
     case Dict.get socket model.gameidDict of
@@ -147,21 +231,15 @@ disconnection model socket =
                         ( model2, Cmd.none )
                     Just sockets ->
                         let socks = List.filter (\s -> s /= socket) sockets
+                            model3 = { model2
+                                         | socketsDict =
+                                             Dict.insert gameid socks socketsDict
+                                     }
                         in
                             ( if socks == [] then
-                                  -- Probably should put a delay here,
-                                  -- in case both players lose their connection
-                                  -- at the same time, but come back
-                                  killGame { model2
-                                               | socketsDict =
-                                                   Dict.remove gameid socketsDict
-                                           }
-                                      gameid
+                                  deathWatch gameid model3
                               else
-                                  { model2
-                                      | socketsDict =
-                                          Dict.insert gameid socks socketsDict
-                                  }
+                                  model3
                             , Cmd.none
                             )
 
@@ -206,7 +284,13 @@ socketMessage model socket request =
                     , Cmd.none
                     )
                 else
-                    processResponse model socket state message response
+                    let mod = case messageGameid response of
+                                  Nothing ->
+                                      model
+                                  Just gameid ->
+                                      reprieve gameid model
+                    in
+                        processResponse mod socket state message response
 
 updatePublicGameId : PublicGames -> String -> String -> PublicGames
 updatePublicGameId games gameid gid =
@@ -376,4 +460,7 @@ decodeMsg value =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    inputPort decodeMsg
+    Sub.batch
+        [ inputPort decodeMsg
+        , Time.every Time.second Tick
+        ]

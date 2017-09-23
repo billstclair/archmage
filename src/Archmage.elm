@@ -170,20 +170,6 @@ setMessageInternal model gs message =
     in
         { model | message = Just msg }
 
-initialPlacementSelections : Player -> Model -> List NodeSelection
-initialPlacementSelections player model =
-    let gs = model.gs
-        board = case player of
-                    WhitePlayer -> gs.topList
-                    BlackPlayer -> gs.bottomList
-        nodes = Dict.values board.nodes
-                |> List.sortBy .column
-    in
-        case LE.find (\node -> node.piece /= Nothing) nodes
-        of
-            Nothing -> []
-            Just node -> [ (placementSelectionColor, node.name) ]
-
 pieceSize : Int
 pieceSize =
     100
@@ -213,20 +199,19 @@ init maybeModel =
                             , otherPlayerid = ""
                             }
                   in
-                      ( { mod
-                            | nodeSelections
-                                = initialPlacementSelections mod.gs.player mod
-                        }
-                      , Nothing
-                      )
-    in
-        ( model
-        , Cmd.batch
-            [ send model.server
-                  <| NewReq { name = model.names.white
+                      ( mod, Nothing )
+        cmd = send model.server
+              <| if restoreState == Nothing || not model.isRemote then
+                     NewReq { name = log "NewReq" model.names.white
                             , isPublic = False
                             , restoreState = restoreState
                             }
+                 else
+                     UpdateReq { playerid = log "UpdateReq" model.playerid }
+    in
+        ( model
+        , Cmd.batch
+            [ cmd
             , windowSizeCmd
             ]
         )
@@ -557,6 +542,7 @@ serverMessage si message model =
                 ( { mod
                       | gameid = gameid
                       , playerid = playerid
+                      , nodeSelections = calculateSelections mod mod.gs
                   }
                 , if model.isRemote then
                       Cmd.none

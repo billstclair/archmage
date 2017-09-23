@@ -404,6 +404,7 @@ type Message
                 , gameState : GameState
                 }
       -- Sent as response to most commands
+      | UpdateReq { playerid : String }
       | UpdateRsp { gameid : String
                   , gameState : GameState
                   }
