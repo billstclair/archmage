@@ -93,6 +93,7 @@ makeSavedModel page {gameid, playerid, you} remoteType names nodeSelections mess
         , windowSize = Nothing
         , renderInfo = Nothing
         , newIsRemote = isRemote
+        , newGameid = gameid
         , otherPlayerid = ""
         }
 

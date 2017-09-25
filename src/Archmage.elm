@@ -198,6 +198,7 @@ init maybeModel =
                             , names = initialPlayerNames
                             , windowSize = Nothing
                             , newIsRemote = True
+                            , newGameid = ""
                             , otherPlayerid = ""
                             }
                   in
@@ -283,12 +284,13 @@ join rawUrl model =
         ( { model
               | isRemote = True
               , server = server
+              , gameid = model.newGameid
               , message = Just <| "Joining " ++ url
               , gs = { gs | mode = JoinMode }
               , you = BlackPlayer
           }
         , send server
-            <| JoinReq { gameid = model.gameid
+            <| JoinReq { gameid = model.newGameid
                        , name = model.names.black
                        }
         )
@@ -316,7 +318,7 @@ updateInternal msg model =
                 Ok url ->
                     handler url model
         SetGameid gameid ->
-            ( { model | gameid = gameid }
+            ( { model | newGameid = gameid }
             , Cmd.none
             )
         JoinGame ->
@@ -899,7 +901,7 @@ renderGamePage model =
         isRemote = model.isRemote
         newIsRemote = model.newIsRemote
         public = model.isPublic
-        gameid = model.gameid
+        newGameid = model.newGameid
         joinMode = gs.mode == JoinMode
         modNodeMsg = if (isRemote && model.you /= gs.player) then
                          (\board node -> Nothing)
@@ -931,10 +933,10 @@ renderGamePage model =
                                   , onInput SetGameid
                                   , size 16
                                   , disabled joinMode
-                                  , value <| if gameid == dummyGameid then
+                                  , value <| if newGameid == dummyGameid then
                                                  ""
                                              else
-                                                 gameid
+                                                 newGameid
                                   ]
                               [ ]
                           , button [ onClick JoinGame

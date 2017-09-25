@@ -189,6 +189,7 @@ type alias Model =
     , windowSize : Maybe Window.Size
     , renderInfo : Maybe RenderInfo
     , newIsRemote : Bool
+    , newGameid : String
     , otherPlayerid : String
     }
 

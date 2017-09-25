@@ -103,7 +103,11 @@ fillinModel : Model -> Model
 fillinModel model =
     let mod = { model | gs = Board.addAnalysis model.gs }
     in
-        { mod | server = fillinServer mod }
+        { mod
+            | server = fillinServer mod
+            , newIsRemote = model.isRemote
+            , newGameid = model.gameid
+        }
 
 fillinServer : Model -> ServerInterface Msg
 fillinServer model =
