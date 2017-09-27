@@ -605,7 +605,7 @@ renderBoardLabels labsize cellSize rows cols =
             , alignmentBaseline "baseline"
             , transform
                   <| "translate(" ++ toString (labsize + chalf)
-                      ++ ", " ++ toString (7*labsize//8) ++ ")"
+                      ++ ", " ++ toString (7*cellSize + 7*labsize//8) ++ ")"
             ]
               ( List.map (\col ->
                               text_ [ x <| toString (col * cellSize)
@@ -619,7 +619,7 @@ renderBoardLabels labsize cellSize rows cols =
             , alignmentBaseline "middle"
             , transform
                   <| "translate(" ++ toString (labsize*7//8)
-                      ++ ", " ++ toString (labsize+chalf) ++ ")"
+                      ++ ", " ++ toString ((size//2)+chalf) ++ ")"
             ]
               ( List.map2 (\row lab ->
                               text_ [ x "0"
@@ -650,7 +650,7 @@ render board doLabels locations cellSize selections nodeMsg =
               renderBoardLabels labsize cellSize board.rows board.cols
           else
               g [][]
-        , g [ transform <| "translate(" ++ slabsize ++ ", " ++ slabsize ++ ")" ]
+        , g [ transform <| "translate(" ++ slabsize ++ ",0)" ]
               [ svg [ width <| toString boardWidth
                     , height <| toString boardHeight
                     , stroke "black"

@@ -545,6 +545,7 @@ serverMessage si message model =
             NewRsp { gameid, playerid } ->
                 ( { mod
                       | gameid = gameid
+                      , newGameid = gameid
                       , playerid = playerid
                       , nodeSelections = calculateSelections mod mod.gs
                   }

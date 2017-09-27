@@ -231,7 +231,7 @@ setBoardPiece name piece board =
 
 rowLetters : List String
 rowLetters =
-    [ "A", "B", "C", "D", "E", "F", "G" ]
+    ["G", "F", "E", "D", "C", "B", "A"]
 
 type alias Node =
     { name : String
