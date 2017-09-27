@@ -712,6 +712,7 @@ endTurnButton model =
                       gs.analysis.otherNoNonKoMoves
     in
         button [ onClick <| otherPlayerClick
+               , pageLinksStyle
                -- Will eventually be disabled during Ko
                , disabled
                      <| (not playMode) ||
@@ -736,6 +737,7 @@ endTurnButton model =
 undoButton : Model -> Html Msg
 undoButton model =
     button [ disabled <| model.gs.isFirstMove
+           , pageLinksStyle
            , title "Click to undo the last move."
            , onClick Undo
            ]
@@ -783,7 +785,7 @@ pages =
 
 pageLink : Page -> (Page, String) -> Html Msg
 pageLink currentPage (page, label) =
-    span []
+    span [ pageLinksStyle ]
         [ text " "
         , if currentPage == page then
               span [ style [("font-weight", "bold")] ] [ text label ]
@@ -792,14 +794,22 @@ pageLink currentPage (page, label) =
                   [ text label ]
         ]
 
+pageLinksFontSize : String
+pageLinksFontSize =
+    "150%"
+
+pageLinksStyle : Attribute Msg
+pageLinksStyle =
+    style [("font-size", pageLinksFontSize)]
+
 pageLinks : Page -> Model -> Html Msg
 pageLinks currentPage model =
     span []
         <| List.concat
-            [ [ endTurnButton model ]
+            [ [ undoButton model ]
             , List.map (pageLink currentPage) pages
-            , [ text " "
-              , undoButton model
+            , [ span [ pageLinksStyle ] [ text " " ]
+              , endTurnButton model
               ]
             ]
 
@@ -856,7 +866,6 @@ view model =
                      ]
                   [ text "Restore" ]
             ]
-        , p [] [ pageLinks model.page model ]
         , footer
         ]
 
@@ -874,10 +883,11 @@ renderGamePage model =
                            JoinMode -> renderInfo.setupCellSize
                            SetupMode -> renderInfo.setupCellSize
                            _ -> renderInfo.captureCellSize
-        setupLocations = case gs.mode of
-                             JoinMode -> renderInfo.setupLineLocations
-                             SetupMode -> renderInfo.setupLineLocations
-                             _ -> renderInfo.captureLineLocations
+        (setupLocations, isPlay)
+            = case gs.mode of
+                  JoinMode -> (renderInfo.setupLineLocations, False)
+                  SetupMode -> (renderInfo.setupLineLocations, False)
+                  _ -> (renderInfo.captureLineLocations, True)
         sels = model.nodeSelections
         (topsel, boardsel, botsel) =
             case gs.mode of
@@ -915,9 +925,15 @@ renderGamePage model =
             , br
             , Board.render
                 b True locations cellSize boardsel modNodeMsg
-            , br
-            , Board.render
-                bl False setupLocations listCellSize botsel modNodeMsg
+            , if isPlay then
+                  text ""
+              else
+                  span []
+                      [ br
+                      , Board.render
+                          bl False setupLocations listCellSize botsel modNodeMsg
+                      ]
+            , p [] [ pageLinks model.page model ]
             , p []
                 [ checkbox "remote" newIsRemote False SetIsRemote
                 , text " "

@@ -1003,11 +1003,12 @@ makeMoveInternal targetName gs =
 doMoveCapture : ColoredPiece -> GameState -> GameState
 doMoveCapture coloredPiece gs =
     let (color, piece) = coloredPiece
-        board = case color of
-                    Black -> gs.topList
-                    White -> gs.bottomList
-        name = case LE.find (\(_, node) -> node.piece == Nothing)
-                       <| Dict.toList board.nodes
+        board = gs.topList
+        nodes = Dict.toList board.nodes
+        dirNodes = case color of
+                       Black -> nodes
+                       White -> List.reverse nodes
+        name = case LE.find (\(_, node) -> node.piece == Nothing) dirNodes
                of
                    Nothing ->
                        ""       --can't happen
@@ -1015,11 +1016,7 @@ doMoveCapture coloredPiece gs =
                        node.name
         newBoard = setBoardPiece name (Just coloredPiece) board
     in
-        case color of
-            Black ->
-                { gs | topList = newBoard }
-            White ->
-                { gs | bottomList = newBoard }
+        { gs | topList = newBoard }
 
 isPlayMode : Mode -> Bool
 isPlayMode mode =
