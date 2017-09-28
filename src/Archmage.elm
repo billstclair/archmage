@@ -181,7 +181,8 @@ init maybeModel =
     let (model, restoreState)
         = case maybeModel of
               Just mod ->
-                  (mod, Just mod.gs)
+                  ( { mod | newIsRemote = mod.isRemote }
+                  , Just mod.gs)
               Nothing ->
                   let mod = { page = GamePage
                             , nodeSelections = []
@@ -308,7 +309,11 @@ updateInternal msg model =
                 , Http.send (ReceiveServerUrl connect) getServerText
                 )
             else
-                init Nothing
+                let (model, cmd) = init Nothing
+                in
+                    ( { model | newIsRemote = model.isRemote }
+                    , cmd
+                    )
         ReceiveServerUrl handler result ->
             case result of
                 Err msg ->
@@ -582,6 +587,10 @@ serverMessage si message model =
                                      { mod
                                          | gs = gs
                                          , nodeSelections = calculateSelections mod gs
+                                         , you = if mod.isRemote then
+                                                     mod.you
+                                                 else
+                                                     gs.player
                                      }
                              GamesRsp games ->
                                  mod
@@ -796,7 +805,7 @@ pageLink currentPage (page, label) =
 
 pageLinksFontSize : String
 pageLinksFontSize =
-    "150%"
+    "110%"
 
 pageLinksStyle : Attribute Msg
 pageLinksStyle =
