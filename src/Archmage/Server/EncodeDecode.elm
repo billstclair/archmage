@@ -95,6 +95,7 @@ makeSavedModel page {gameid, playerid, you} remoteType names nodeSelections mess
         , newIsRemote = isRemote
         , newGameid = gameid
         , otherPlayerid = ""
+        , chatSettings = Nothing
         }
 
 makePage : String -> Decoder Page

@@ -19,7 +19,7 @@ import Archmage.Types as Types
              , NodeSelection, RenderInfo
              , Page(..), Msg(..), Mode(..), ClickKind(..), WhichBoard(..)
              , NodeMsg, MovesDict, PlayerNames, initialPlayerNames
-             , ServerInterface, Message(..)
+             , ServerInterface, Message(..), ChatSettings
              , otherColor, playerColor, otherPlayer
              , setBoardPiece
              )
@@ -36,6 +36,8 @@ import Archmage.Server.EncodeDecode
              )
 import Archmage.Server.Interface as Interface
     exposing ( makeProxyServer, makeServer, send, dummyGameid )
+
+import ElmChat
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span
                      , input
@@ -201,6 +203,7 @@ init maybeModel =
                             , newIsRemote = True
                             , newGameid = ""
                             , otherPlayerid = ""
+                            , chatSettings = Nothing
                             }
                   in
                       ( mod, Nothing )
@@ -340,6 +343,18 @@ updateInternal msg model =
                     )
                 Ok message ->
                     serverMessage model.server message model
+        ChatUpdate settings cmd ->
+            ( { model | chatSettings = Just settings }
+            , cmd
+            )
+        ChatSend line settings ->
+            -- This moves to the server message processing
+            ( { model | chatSettings = Just settings }
+            , send model.server
+                <| ChatReq { playerid = model.playerid
+                           , text = line
+                           }
+            )
         SetIsRemote isRemote ->
             ( { model | newIsRemote = isRemote }
             , Cmd.none
@@ -563,46 +578,76 @@ serverMessage si message model =
                                      }
                 )
             _ ->
-                let m2 = case message of
-                             JoinRsp { playerid, names, gameState } ->
-                                 let m3 = if playerid == "" then
-                                              mod
-                                          else if model.isRemote then
-                                              { mod | playerid = playerid }
+                case message of
+                    JoinRsp { playerid, names, gameState } ->
+                        let m3 = if playerid == "" then
+                                     mod
+                                 else if model.isRemote then
+                                          { mod | playerid = playerid }
+                                      else
+                                          { mod | otherPlayerid = playerid }
+                        in
+                            ( { m3
+                                  | gs = gameState
+                                  , names = names
+                                  , nodeSelections =
+                                      calculateSelections m3 gameState
+                                  , chatSettings = makeChatSettings m3
+                              }
+                            , Cmd.none
+                            )
+                    UpdateRsp { gameState } ->
+                        let gs = if model.isRemote then
+                                     Board.addAnalysis gameState
+                                 else
+                                     gameState
+                        in
+                            ( { mod
+                                  | gs = gs
+                                  , nodeSelections = calculateSelections mod gs
+                                  , you = if mod.isRemote then
+                                              mod.you
                                           else
-                                              { mod | otherPlayerid = playerid }
-                                 in
-                                     { m3
-                                         | gs = gameState
-                                         , names = names
-                                         , nodeSelections =
-                                             calculateSelections m3 gameState
-                                     }
-                             UpdateRsp { gameState } ->
-                                 let gs = if model.isRemote then
-                                              Board.addAnalysis gameState
-                                          else
-                                              gameState
-                                 in
-                                     { mod
-                                         | gs = gs
-                                         , nodeSelections = calculateSelections mod gs
-                                         , you = if mod.isRemote then
-                                                     mod.you
-                                                 else
-                                                     gs.player
-                                     }
-                             GamesRsp games ->
-                                 mod
-                             ErrorRsp { request, text } ->
-                                 { mod | message = Just text }
-                             ChatRsp { gameid, player, text } ->
-                                 -- TODO
-                                 mod
-                             _ ->
-                                 mod
-                in
-                    (m2, Cmd.none)
+                                              gs.player
+                              }
+                            , Cmd.none
+                            )
+                    ChatRsp {gameid, player, text} ->
+                        chatRsp mod player text
+                    GamesRsp games ->
+                        (mod, Cmd.none)
+                    ErrorRsp { request, text } ->
+                        ( { mod | message = Just text }
+                        , Cmd.none
+                        )
+                    _ ->
+                        (mod, Cmd.none)
+
+chatRsp : Model -> Player -> String -> (Model, Cmd Msg)
+chatRsp model player line =
+    case model.chatSettings of
+        Nothing ->
+            (model, Cmd.none)
+        Just settings ->
+            let name = if player == model.you then
+                           "You"
+                       else if player == WhitePlayer then
+                           model.names.white
+                       else
+                           model.names.black
+                message = name ++ ": " ++ line
+                (settings2, cmd) = ElmChat.addChat settings message
+            in
+                ( { model | chatSettings = Just settings2 }
+                , cmd
+                )
+
+makeChatSettings : Model -> Maybe ChatSettings
+makeChatSettings model =
+    if not model.isRemote then
+        Nothing
+    else
+        Just <| ElmChat.makeSettings "chatid" 14 True ChatUpdate
 
 br : Html Msg
 br =
@@ -942,6 +987,7 @@ renderGamePage model =
                       , Board.render
                           bl False setupLocations listCellSize botsel modNodeMsg
                       ]
+            , renderChat model
             , p [] [ pageLinks model.page model ]
             , p []
                 [ checkbox "remote" newIsRemote False SetIsRemote
@@ -974,6 +1020,17 @@ renderGamePage model =
                       text ""
                 ]
             ]
+
+renderChat : Model -> Html Msg
+renderChat model =
+    case model.chatSettings of
+        Nothing ->
+            text ""
+        Just settings ->
+            div []
+                [ ElmChat.chat settings
+                , ElmChat.inputBox 30 "Send" ChatSend settings
+                ]
 
 checkbox : String -> Bool -> Bool -> (Bool -> msg) -> Html msg
 checkbox text_ isChecked isDisabled checker =

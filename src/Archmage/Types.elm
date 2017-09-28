@@ -17,7 +17,7 @@ module Archmage.Types exposing ( Model
                                , NodeMsg, ClickKind(..), WhichBoard(..)
                                , Move, MovesDict, Direction(..)
                                , Message(..), PublicGames, PublicGame, ServerState
-                               , noMessage, PlayerInfo
+                               , noMessage, PlayerInfo, ChatSettings
                                , PlayerNames, initialPlayerNames
                                , ServerInterface(..), emptyPublicGames
                                , getBoardPiece, setBoardPiece
@@ -26,6 +26,8 @@ module Archmage.Types exposing ( Model
                                , rowLetters, zeroPoint
                                , get, set, rget, butLast, adjoin
                                )
+
+import ElmChat
 
 import Dict exposing ( Dict )
 import Time exposing ( Time )
@@ -52,14 +54,14 @@ type WhichBoard
     | BottomList
     | MainBoard
 
+type alias ChatSettings =
+    ElmChat.Settings Msg
+
 type Msg
     = ServerMessage (ServerInterface Msg) Message
     | WebSocketMessage String
-    | SetChatInput String
-    | SendChat
-    | ChatKeydown Int
-    | ChatScroll Float
-    | SetChatSize Int
+    | ChatUpdate ChatSettings (Cmd Msg)
+    | ChatSend String ChatSettings
     | SetName String
     | SetGameid String
     | ReceiveServerUrl (String -> Model -> (Model, Cmd Msg)) (Result Http.Error String)
@@ -191,6 +193,7 @@ type alias Model =
     , newIsRemote : Bool
     , newGameid : String
     , otherPlayerid : String
+    , chatSettings : Maybe ChatSettings
     }
 
 type TheGameState =
