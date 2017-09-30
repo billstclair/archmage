@@ -9,6 +9,7 @@
     ],
     "exposed-modules": [],
     "dependencies": {
+        "billstclair/elm-chat": "1.1.1 <= v < 2.0.0",
         "elm-community/elm-test": "4.1.1 <= v < 5.0.0",
         "elm-community/list-extra": "6.1.0 <= v < 7.0.0",
         "elm-community/string-extra": "1.4.0 <= v < 2.0.0",

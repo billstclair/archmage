@@ -348,7 +348,6 @@ updateInternal msg model =
             , cmd
             )
         ChatSend line settings ->
-            -- This moves to the server message processing
             ( { model | chatSettings = Just settings }
             , send model.server
                 <| ChatReq { playerid = model.playerid
