@@ -678,7 +678,24 @@ makeChatSettings model =
     if not model.isRemote then
         Nothing
     else
-        Just <| ElmChat.makeSettings "chatid" 14 True ChatUpdate
+        let settings = ElmChat.makeSettings "chatid" 14 True ChatUpdate
+            attributes = settings.attributes
+            width = case model.renderInfo of
+                        Nothing -> Nothing
+                        Just ri -> Just <| (ri.cellSize * 7) - 30
+            attr = case width of
+                       Nothing ->
+                           attributes
+                       Just w ->
+                           { attributes
+                               | textArea
+                                 = [ style [ ("width", (toString w) ++ "px")
+                                           , ("height", "6em")
+                                           ]
+                                   ]
+                           }
+        in
+            Just { settings | attributes = attr }
 
 br : Html Msg
 br =
