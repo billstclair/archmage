@@ -598,6 +598,7 @@ serverMessage si message model =
                       , newGameid = gameid
                       , playerid = playerid
                       , nodeSelections = calculateSelections mod mod.gs
+                      , newIsRemote = model.isRemote
                   }
                 , if model.isRemote then
                       Cmd.none
