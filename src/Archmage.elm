@@ -40,7 +40,7 @@ import Archmage.Server.Interface as Interface
 import ElmChat
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span
-                     , input
+                     , input, table, tr, td
                      )
 import Html.Attributes exposing ( align, src, href, target, style, disabled, title
                                 , type_, size, value, width, checked
@@ -89,15 +89,25 @@ targetSelectionColor = "red"
 messages : List (Mode, String)
 messages =
     [ (JoinMode, "Waiting for other player to join.")
-    , (SetupMode, "select and place a piece.")
-    , (ChooseActorMode, "click a " ++ actorSelectionColor
+    , (SetupMode, "Select and place a piece.")
+    , (ChooseActorMode, "Click a " ++ actorSelectionColor
            ++ " actor.")
-    , (ChooseSubjectMode, "click a " ++ subjectSelectionColor
+    , (ChooseSubjectMode, "Click a " ++ subjectSelectionColor
            ++ " subject or the actor.")
-    , (ChooseTargetMode, "click a " ++ targetSelectionColor
+    , (ChooseTargetMode, "Click a " ++ targetSelectionColor
            ++ " target, subject, or actor.")
     , (GameOverMode, "Game Over!")
     ]
+
+playerName : Model -> String
+playerName model =
+    let names = log "names" model.names
+    in
+        case model.gs.player of
+            WhitePlayer ->
+                names.white
+            BlackPlayer ->
+                names.black
 
 setMessage : Model -> Model
 setMessage model =
@@ -120,7 +130,9 @@ setMessage model =
                                            else
                                                "finish the turn."
                               in
-                                  Just <| "Wait for the other player to " ++ dowhat
+                                  Just
+                                  <| "Wait for " ++ (playerName model) ++
+                                      " to " ++ dowhat
                           else
                               Nothing
                 in
@@ -132,9 +144,12 @@ setMessage model =
 
 setMessageInternal : Model -> GameState -> String -> Model
 setMessageInternal model gs message =
-    let c = case gs.player of
-                WhitePlayer -> "White, "
-                BlackPlayer -> "Black, "
+    let c = if model.isRemote then
+                ""
+            else
+                case gs.player of
+                    WhitePlayer -> "White, "
+                    BlackPlayer -> "Black, "
         analysis = gs.analysis
         msg2 = if analysis.noNonKoMoves then
                    if analysis.otherNoNonKoMoves then
@@ -150,7 +165,7 @@ setMessageInternal model gs message =
                    && Dict.isEmpty analysis.moves
                then
                    if analysis.otherNoNonKoMoves then
-                       "other player has no non-Ko moves. Undo."
+                       (playerName model) ++ " has no non-Ko moves. Undo."
                    else if gs.isFirstMove then
                        "no moves are possible. Click \"End Turn\"."
                    else if analysis.isKo then
@@ -198,6 +213,7 @@ init maybeModel =
                             , gameid = ""
                             , playerid = ""
                             , you = WhitePlayer
+                            , yourName = Nothing
                             , names = initialPlayerNames
                             , windowSize = Nothing
                             , newIsRemote = True
@@ -209,7 +225,10 @@ init maybeModel =
                       ( mod, Nothing )
         cmd = send model.server
               <| if restoreState == Nothing || not model.isRemote then
-                     NewReq { name = log "NewReq" model.names.white
+                     NewReq { name = log "NewReq"
+                                  <| case model.yourName of
+                                         Nothing -> model.names.white
+                                         Just name -> name
                             , isPublic = False
                             , restoreState = restoreState
                             }
@@ -273,7 +292,9 @@ connect rawUrl model =
                       , gs = { gs | mode = JoinMode }
                   }
                 , send server
-                    <| NewReq { name = model.names.white
+                    <| NewReq { name = case model.yourName of
+                                           Nothing -> model.names.white
+                                           Just name -> name
                               , isPublic = model.isPublic
                               , restoreState = rs
                               }
@@ -295,7 +316,9 @@ join rawUrl model =
           }
         , send server
             <| JoinReq { gameid = model.newGameid
-                       , name = model.names.black
+                       , name = case model.yourName of
+                                    Nothing -> model.names.black
+                                    Just name -> name
                        }
         )
 
@@ -325,6 +348,10 @@ updateInternal msg model =
                     )
                 Ok url ->
                     handler url model
+        SetName name ->
+            ( { model | yourName = Just name }
+            , Cmd.none
+            )
         SetGameid gameid ->
             ( { model | newGameid = gameid }
             , Cmd.none
@@ -922,6 +949,12 @@ view model =
         , footer
         ]
 
+tableLabelStyle : Attribute Msg
+tableLabelStyle =
+    style [ ("text-align", "right")
+          , ("font-weight", "bold")
+          ]
+
 renderGamePage : Model -> Html Msg
 renderGamePage model =
     let renderInfo = case model.renderInfo of
@@ -995,28 +1028,46 @@ renderGamePage model =
                 , text " "
                 , button [ onClick NewGame ]
                       [ text "New Game" ]
-                , if newIsRemote || (isRemote && joinMode)
-                  then
-                      span []
-                          [ br
-                          , text "Game ID: "
-                          , input [ type_ "text"
-                                  , onInput SetGameid
-                                  , size 16
-                                  , disabled joinMode
-                                  , value <| if newGameid == dummyGameid then
-                                                 ""
-                                             else
-                                                 newGameid
-                                  ]
-                              [ ]
-                          , button [ onClick JoinGame
-                                   , disabled <| gs.mode == JoinMode
-                                   ]
-                              [ text "Join Game" ]
-                          ]
-                  else
+                , if not (newIsRemote || (isRemote && joinMode)) then
                       text ""
+                  else
+                      table []
+                          [ tr []
+                                [ td [ tableLabelStyle ]
+                                      [ text "Your name: " ]
+                                , td [] [ input [ type_ "text"
+                                                , onInput SetName
+                                                , size 16
+                                                , disabled joinMode
+                                                , value <| case model.yourName of
+                                                               Nothing -> ""
+                                                               Just name -> name
+                                                ]
+                                              []
+                                        ]
+                                ]
+                          , tr []
+                              [ td [ tableLabelStyle ]
+                                    [ text "Game ID: " ]
+                              , td [] [ input [ type_ "text"
+                                              , onInput SetGameid
+                                              , size 16
+                                              , disabled joinMode
+                                              , value <|
+                                                  if newGameid == dummyGameid then
+                                                      ""
+                                                  else
+                                                      newGameid
+                                              ]
+                                            []
+                                      ]
+                              , td [] [ button [ onClick JoinGame
+                                               , disabled <| gs.mode == JoinMode
+                                               ]
+                                            [ text "Join Game" ]
+                                      ]
+                              ]
+                          ]
                 ]
             ]
 

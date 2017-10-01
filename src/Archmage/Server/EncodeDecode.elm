@@ -65,17 +65,19 @@ type alias GameID =
     { gameid : String
     , playerid : String
     , you : Player
+    , yourName : Maybe String
     }
 
 gameIDDecoder : Decoder GameID
 gameIDDecoder =
-    JD.map3 GameID
+    JD.map4 GameID
         (JD.field "gameid" JD.string)
         (JD.field "playerid" JD.string)
         (JD.field "you" playerDecoder)
+        (JD.field "yourName" (JD.nullable JD.string))
 
 makeSavedModel : Page -> GameID -> String -> PlayerNames -> List NodeSelection -> Maybe String -> GameState -> ServerInterface Msg -> Model
-makeSavedModel page {gameid, playerid, you} remoteType names nodeSelections message gs server =
+makeSavedModel page {gameid, playerid, you, yourName} remoteType names nodeSelections message gs server =
     let (isRemote, isPublic) = parseRemoteType remoteType
     in
         { page = page
@@ -88,6 +90,7 @@ makeSavedModel page {gameid, playerid, you} remoteType names nodeSelections mess
         , gameid = gameid
         , playerid = playerid
         , you = you
+        , yourName = yourName
         , names = names
         , restoreState = ""
         , windowSize = Nothing
@@ -666,6 +669,7 @@ modelEncoder model =
         , ("GameID", gameIDEncoder { gameid =  model.gameid
                                    , playerid = model.playerid
                                    , you = model.you
+                                   , yourName = model.yourName
                                    }
           )
         , ("remoteType"
@@ -690,6 +694,10 @@ gameIDEncoder id =
     JE.object [ ("gameid", JE.string id.gameid)
               , ("playerid", JE.string id.playerid)
               , ("you", JE.string <| playerToString id.you)
+              , ("yourName", case id.yourName of
+                                 Nothing -> JE.null
+                                 Just name -> JE.string name
+                )
               ]
 
 pageEncoder : Page -> Value

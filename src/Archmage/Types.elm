@@ -185,6 +185,7 @@ type alias Model =
     , gameid : String
     , playerid : String
     , you : Player
+    , yourName : Maybe String
     , names : PlayerNames
     -- not persisted
     , restoreState : String
