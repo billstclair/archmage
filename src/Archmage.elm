@@ -57,7 +57,7 @@ import Debug exposing ( log )
 
 main =
     Html.program
-        { init = init Nothing
+        { init = init Nothing Nothing
         , view = view
         , update = update
         , subscriptions = subscriptions
@@ -193,36 +193,40 @@ pieceSize : Int
 pieceSize =
     100
 
-init : Maybe Model -> ( Model, Cmd Msg )
-init maybeModel =
+initialModel : Model
+initialModel =
+    { page = GamePage
+    , nodeSelections = []
+    , renderInfo = Just <| Board.renderInfo pieceSize
+    , message = Nothing
+    , restoreState = ""
+    , gs = initialGameState False
+    , isRemote = False
+    , isPublic = False
+    , server = makeProxyServer ServerMessage
+    , gameid = ""
+    , playerid = ""
+    , you = WhitePlayer
+    , yourName = Nothing
+    , names = initialPlayerNames
+    , windowSize = Nothing
+    , newIsRemote = True
+    , newGameid = ""
+    , otherPlayerid = ""
+    , chatSettings = Nothing
+    }
+    
+init : Maybe String -> Maybe Model -> ( Model, Cmd Msg )
+init yourName maybeModel =
     let (model, restoreState)
-        = case maybeModel of
-              Just mod ->
-                  ( { mod | newIsRemote = mod.isRemote }
-                  , Just mod.gs)
-              Nothing ->
-                  let mod = { page = GamePage
-                            , nodeSelections = []
-                            , renderInfo = Just <| Board.renderInfo pieceSize
-                            , message = Nothing
-                            , restoreState = ""
-                            , gs = initialGameState False
-                            , isRemote = False
-                            , isPublic = False
-                            , server = makeProxyServer ServerMessage
-                            , gameid = ""
-                            , playerid = ""
-                            , you = WhitePlayer
-                            , yourName = Nothing
-                            , names = initialPlayerNames
-                            , windowSize = Nothing
-                            , newIsRemote = True
-                            , newGameid = ""
-                            , otherPlayerid = ""
-                            , chatSettings = Nothing
-                            }
-                  in
-                      ( mod, Nothing )
+            = case maybeModel of
+                  Just mod ->
+                      ( { mod | newIsRemote = mod.isRemote }
+                      , Just mod.gs)
+                  Nothing ->
+                      let mod = { initialModel | yourName = yourName }
+                      in
+                          ( mod, Nothing )
         cmd = send model.server
               <| if restoreState == Nothing || not model.isRemote then
                      NewReq { name = log "NewReq"
@@ -335,9 +339,9 @@ updateInternal msg model =
                 , Http.send (ReceiveServerUrl connect) getServerText
                 )
             else
-                let (model, cmd) = init Nothing
+                let (mod, cmd) = init model.yourName Nothing
                 in
-                    ( { model | newIsRemote = model.isRemote }
+                    ( { mod | newIsRemote = model.isRemote }
                     , cmd
                     )
         ReceiveServerUrl handler result ->

@@ -47,12 +47,12 @@ initWithStorage : Maybe String -> ( Model, Cmd Msg )
 initWithStorage maybeJson =
     case maybeJson of
         Nothing ->
-            init Nothing
+            init Nothing Nothing
         Just json ->
             case decodeModel <| log "decodeModel" json of
                 Err msg ->
                     let m = log "  error" msg
                     in
-                        init Nothing
+                        init Nothing Nothing
                 Ok model ->
-                    init (Just <| fillinModel model)
+                    init Nothing (Just <| fillinModel model)
