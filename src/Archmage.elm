@@ -101,7 +101,7 @@ messages =
 
 playerName : Model -> String
 playerName model =
-    let names = log "names" model.names
+    let names = model.names
     in
         case model.gs.player of
             WhitePlayer ->
@@ -221,8 +221,18 @@ init yourName maybeModel =
     let (model, restoreState)
             = case maybeModel of
                   Just mod ->
-                      ( { mod | newIsRemote = mod.isRemote }
-                      , Just mod.gs)
+                      ( { mod
+                            | newIsRemote = mod.isRemote
+                            , chatSettings =
+                                case mod.chatSettings of
+                                    Nothing ->
+                                        Nothing
+                                    Just settings ->
+                                        Just
+                                        <| updateChatAttributes settings mod
+                        }
+                      , Just mod.gs
+                      )
                   Nothing ->
                       let mod = { initialModel | yourName = yourName }
                       in
@@ -463,12 +473,28 @@ updateInternal msg model =
                                    }
                     )
         WindowSize size ->
-            ( { model
-                  | windowSize = Just size
-                  , renderInfo = Just <| Board.renderInfo <| windowSizeToPieceSize size
-              }
-            , Cmd.none
-            )
+            let mod = { model
+                          | windowSize = Just size
+                          , renderInfo = Just
+                                         <| Board.renderInfo
+                                         <| windowSizeToPieceSize size
+                      }
+                mod2 = { mod
+                           | chatSettings =
+                               case mod.chatSettings of
+                                   Nothing ->
+                                       Nothing
+                                   Just settings ->
+                                       Just <| updateChatAttributes settings mod
+                       }
+            in
+                ( mod2
+                , case mod2.chatSettings of
+                      Nothing ->
+                          Cmd.none
+                      Just settings ->
+                          ElmChat.restoreScroll settings
+                )
         _ ->
             ( model, Cmd.none )
 
@@ -640,6 +666,12 @@ serverMessage si message model =
                                               mod.you
                                           else
                                               gs.player
+                                  , chatSettings =
+                                      case mod.chatSettings of
+                                          Nothing ->
+                                              makeChatSettings mod
+                                          settings ->
+                                              settings
                               }
                             , Cmd.none
                             )
@@ -673,29 +705,34 @@ chatRsp model player line =
                 , cmd
                 )
 
+updateChatAttributes : ChatSettings -> Model -> ChatSettings
+updateChatAttributes settings model =
+    let attributes = settings.attributes
+        width = case model.renderInfo of
+                    Nothing -> Nothing
+                    Just ri -> Just <| (ri.cellSize * 7) - 30
+        attr = case width of
+                   Nothing ->
+                       attributes
+                   Just w ->
+                       { attributes
+                           | textArea
+                             = [ style [ ("width", (toString w) ++ "px")
+                                       , ("height", "6em")
+                                       ]
+                               ]
+                       }
+    in
+        { settings | attributes = attr }
+                
 makeChatSettings : Model -> Maybe ChatSettings
 makeChatSettings model =
     if not model.isRemote then
         Nothing
     else
         let settings = ElmChat.makeSettings "chatid" 14 True ChatUpdate
-            attributes = settings.attributes
-            width = case model.renderInfo of
-                        Nothing -> Nothing
-                        Just ri -> Just <| (ri.cellSize * 7) - 30
-            attr = case width of
-                       Nothing ->
-                           attributes
-                       Just w ->
-                           { attributes
-                               | textArea
-                                 = [ style [ ("width", (toString w) ++ "px")
-                                           , ("height", "6em")
-                                           ]
-                                   ]
-                           }
         in
-            Just { settings | attributes = attr }
+            Just <| updateChatAttributes settings model
 
 br : Html Msg
 br =
@@ -981,7 +1018,7 @@ renderGamePage : Model -> Html Msg
 renderGamePage model =
     let renderInfo = case model.renderInfo of
                          Nothing ->
-                             Board.renderInfo <| log "defaultRenderInfo" pieceSize
+                             Board.renderInfo pieceSize
                          Just ri ->
                              ri
         cellSize = renderInfo.cellSize

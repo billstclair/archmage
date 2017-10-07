@@ -27,8 +27,11 @@ import Archmage.Types as Types
              )
 import Archmage.Board as Board
     exposing ( boardToString, stringToBoard, pieceToChar, charToPiece )
+
+import ElmChat
         
 import Json.Decode as JD exposing ( Decoder )
+import Json.Decode.Pipeline as JP
 import Json.Encode as JE exposing ( Value )
 import Char
 import String.Extra as SE
@@ -49,15 +52,18 @@ decodeModel json =
 
 modelDecoder : Decoder Model
 modelDecoder =
-    JD.map8 makeSavedModel
-        (JD.field "page" pageDecoder)
-        (JD.field "GameID" gameIDDecoder)
-        (JD.field "remoteType" JD.string)
-        (JD.field "names" playerNamesDecoder)
-        (JD.field "nodeSelections" (JD.list nodeSelectionDecoder))
-        (JD.field "message" (JD.nullable JD.string))
-        (JD.field  "gs" gameStateDecoder)
-        (JD.field "server" serverInterfaceDecoder)
+    JP.decode makeSavedModel
+        |> JP.required "page" pageDecoder
+        |> JP.required "GameID" gameIDDecoder
+        |> JP.required "remoteType" JD.string
+        |> JP.required "names" playerNamesDecoder
+        |> JP.required "nodeSelections" (JD.list nodeSelectionDecoder)
+        |> JP.required "message" (JD.nullable JD.string)
+        |> JP.required  "gs" gameStateDecoder
+        |> JP.required "server" serverInterfaceDecoder
+        |> JP.required "chatSettings" (JD.nullable
+                                       <| ElmChat.settingsDecoder ChatUpdate
+                                      )
 
 -- These are put together only to enable JD.map8, which is the maximum
 -- number of args to a map function. Yes, I know the alternative.
@@ -76,8 +82,8 @@ gameIDDecoder =
         (JD.field "you" playerDecoder)
         (JD.field "yourName" (JD.nullable JD.string))
 
-makeSavedModel : Page -> GameID -> String -> PlayerNames -> List NodeSelection -> Maybe String -> GameState -> ServerInterface Msg -> Model
-makeSavedModel page {gameid, playerid, you, yourName} remoteType names nodeSelections message gs server =
+makeSavedModel : Page -> GameID -> String -> PlayerNames -> List NodeSelection -> Maybe String -> GameState -> ServerInterface Msg -> Maybe (ElmChat.Settings Msg) -> Model
+makeSavedModel page {gameid, playerid, you, yourName} remoteType names nodeSelections message gs server settings =
     let (isRemote, isPublic) = parseRemoteType remoteType
     in
         { page = page
@@ -98,7 +104,7 @@ makeSavedModel page {gameid, playerid, you, yourName} remoteType names nodeSelec
         , newIsRemote = isRemote
         , newGameid = gameid
         , otherPlayerid = ""
-        , chatSettings = Nothing
+        , chatSettings = settings
         }
 
 makePage : String -> Decoder Page
@@ -687,6 +693,12 @@ modelEncoder model =
           )
         , ("gs", gameStateEncoder model.gs)
         , ("server", serverInterfaceEncoder model.server)
+        , ("chatSettings", case model.chatSettings of
+                               Nothing ->
+                                   JE.null
+                               Just settings ->
+                                   ElmChat.settingsEncoder settings
+          )
         ]
 
 gameIDEncoder : GameID -> Value
