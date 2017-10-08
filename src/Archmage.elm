@@ -1106,15 +1106,27 @@ renderGamePage model =
         locations = renderInfo.locations
         gs = model.gs
         emptyBoard = Board.isEmptyBoard gs.board
-        listCellSize = case gs.mode of
-                           JoinMode -> renderInfo.setupCellSize
-                           SetupMode -> renderInfo.setupCellSize
-                           _ -> renderInfo.captureCellSize
+        isSetup = Board.isSetupBoard gs.topList
+        isNewJoin =
+            isSetup && gs.mode == JoinMode
+        tl = if isNewJoin && model.you == BlackPlayer then
+                 Board.emptySetupBoard
+             else
+                 gs.topList
+        b  = gs.board
+        bl = if isNewJoin && model.you == WhitePlayer then
+                 Board.emptySetupBoard
+             else
+                 gs.bottomList
         (setupLocations, isPlay)
-            = case gs.mode of
-                  JoinMode -> (renderInfo.setupLineLocations, False)
-                  SetupMode -> (renderInfo.setupLineLocations, False)
-                  _ -> (renderInfo.captureLineLocations, True)
+            = if isSetup then
+                  (renderInfo.setupLineLocations, False)
+              else
+                  (renderInfo.captureLineLocations, True)
+        listCellSize = if isSetup then
+                           renderInfo.setupCellSize
+                       else
+                           renderInfo.captureCellSize
         sels = model.nodeSelections
         (topsel, boardsel, botsel) =
             case gs.mode of
@@ -1126,16 +1138,6 @@ renderGamePage model =
                             ([], [], sels)
                 _ ->
                     ([], sels, [])
-        isJoin = gs.mode == JoinMode
-        tl = if isJoin && model.you == BlackPlayer then
-                 Board.emptySetupBoard
-             else
-                 gs.topList
-        b  = gs.board
-        bl = if isJoin && model.you == WhitePlayer then
-                 Board.emptySetupBoard
-             else
-                 gs.bottomList
         isRemote = model.isRemote
         newIsRemote = model.newIsRemote
         public = model.isPublic
