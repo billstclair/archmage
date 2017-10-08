@@ -98,15 +98,19 @@ messages =
     , (GameOverMode, "Game Over!")
     ]
 
-playerName : Model -> String
-playerName model =
+playerName : Player -> Model -> String
+playerName player model =
     let names = model.names
     in
-        case model.gs.player of
+        case player of
             WhitePlayer ->
                 names.white
             BlackPlayer ->
                 names.black
+
+currentPlayerName : Model -> String
+currentPlayerName model =
+    playerName model.gs.player model
 
 setMessage : Model -> Model
 setMessage model =
@@ -130,7 +134,7 @@ setMessage model =
                                                "finish the turn."
                               in
                                   Just
-                                  <| "Wait for " ++ (playerName model) ++
+                                  <| "Wait for " ++ (currentPlayerName model) ++
                                       " to " ++ dowhat
                           else
                               Nothing
@@ -151,21 +155,16 @@ setMessageInternal model gs message =
                     BlackPlayer -> "Black, "
         analysis = gs.analysis
         msg2 = if analysis.noNonKoMoves then
-                   if analysis.otherNoNonKoMoves then
-                       "Ends in Ko for both players. Undo."
-                   else
-                       let suffix = if gs.isFirstMove then
-                                        "Click \"End Turn\"."
-                                    else
-                                        "Undo or End Turn."
-                       in
-                           "Ends in Ko. " ++ suffix
+                   let suffix = if gs.isFirstMove then
+                                    "Click \"End Turn\"."
+                                else
+                                    "Undo or End Turn."
+                   in
+                       "Ends in Ko. " ++ suffix
                else if gs.mode == ChooseActorMode
                    && Dict.isEmpty analysis.moves
                then
-                   if analysis.otherNoNonKoMoves then
-                       (playerName model) ++ " has no non-Ko moves. Undo."
-                   else if gs.isFirstMove then
+                   if gs.isFirstMove then
                        "no moves are possible. Click \"End Turn\"."
                    else if analysis.isKo then
                        "in Ko and no moves possible. Undo."
@@ -177,12 +176,26 @@ setMessageInternal model gs message =
                   JoinMode ->
                       message
                   GameOverMode ->
-                      if analysis.noNonKoMoves &&
-                          analysis.otherNoNonKoMoves
-                      then
-                          "Game Over! Ends in Ko for both players."
-                      else
-                          message
+                      let an = if model.you == gs.player then
+                                    analysis
+                                else
+                                    let gs2 = Board.addAnalysis
+                                              { gs | player = model.you }
+                                    in
+                                        gs2.analysis
+                          other = playerName (otherPlayer model.you) model
+                      in
+                          if an.noNonKoMoves then
+                              if an.otherNoNonKoMoves then
+                                  "Game Over! No non-Ko moves for either player."
+                              else
+                                  "Game Over! You: no non-Ko moves. " ++
+                                   other ++ ": no moves."
+                          else if an.otherNoNonKoMoves then
+                              "Game Over! You: no moves. " ++
+                              other ++ ": no non-Ko moves."
+                          else
+                              message
                   _ ->
                       c ++ msg2
     in
@@ -280,39 +293,32 @@ getPlayerid model =
 
 connect : String -> Model -> (Model, Cmd Msg)
 connect url model =
+    restoreTheGame Nothing url model
+        
+restoreTheGame : Maybe GameState -> String -> Model -> (Model, Cmd Msg)
+restoreTheGame gameState url model =
     let server = makeServer url Noop
-        rsres = case model.restoreState of
-                    "" ->
-                        Ok Nothing
-                    json ->
-                        case decodeGameState json of
-                            Err msg ->
-                                Err msg
-                            Ok rs ->
-                                Ok <| Just rs
-        gs = initialGameState False
+        gs = case gameState of
+                 Nothing ->
+                     initialGameState False
+                 Just gs ->
+                     gs
     in
-        case rsres of
-            Err msg ->
-                ( { model | message = Just msg }
-                , Cmd.none
-                )
-            Ok rs ->
-                ( { model
-                      | isRemote = True
-                      , you = WhitePlayer
-                      , server = server
-                      , message = Just <| "Connecting to " ++ url
-                      , gs = { gs | mode = JoinMode }
-                  }
-                , send server
-                    <| NewReq { name = case model.yourName of
-                                           Nothing -> model.names.white
-                                           Just name -> name
-                              , isPublic = model.isPublic
-                              , restoreState = rs
-                              }
-                )
+        ( { model
+              | isRemote = True
+              , you = WhitePlayer
+              , server = server
+              , message = Just <| "Connecting to " ++ url
+              , gs = { gs | mode = JoinMode }
+          }
+        ,  send server
+            <| NewReq { name = case model.yourName of
+                                   Nothing -> model.names.white
+                                   Just name -> name
+                      , isPublic = model.isPublic
+                      , restoreState = gameState
+                      }
+        )
 
 join : String -> Model -> (Model, Cmd Msg)
 join url model =
@@ -365,7 +371,7 @@ updateInternal msg model =
             else
                 let (mod, cmd) = init model.yourName Nothing
                 in
-                    ( { mod | newIsRemote = model.isRemote }
+                    ( { mod | newIsRemote = False }
                     , cmd
                     )
         ReceiveServerUrl handler result ->
@@ -440,11 +446,19 @@ updateInternal msg model =
                     , Cmd.none
                     )
                 Ok gs ->
-                    ( model
-                    , send model.server
-                        <| NewReq { name = model.names.white
-                                  , isPublic = False
-                                  , restoreState = Just gs
+                    if model.newIsRemote then
+                        ( model
+                        , Http.send (ReceiveServerUrl
+                                         <| restoreTheGame (Just gs)
+                                    )
+                            getServerText
+                        )
+                    else
+                        ( { model | you = WhitePlayer }
+                        , send model.server
+                            <| NewReq { name = model.names.white
+                                      , isPublic = False
+                                      , restoreState = Just gs
                                   }
                     )
         SetPage page ->
@@ -672,12 +686,16 @@ serverMessage si message model =
                                           { mod | playerid = playerid }
                                       else
                                           { mod | otherPlayerid = playerid }
+                            gs = if model.isRemote then
+                                     Board.addAnalysis gameState
+                                 else
+                                     gameState
                         in
                             ( { m3
-                                  | gs = gameState
+                                  | gs = gs
                                   , names = names
                                   , nodeSelections =
-                                      calculateSelections m3 gameState
+                                      calculateSelections m3 gs
                                   , chatSettings = makeChatSettings m3
                               }
                             , Cmd.none
@@ -886,19 +904,14 @@ endTurnButton model =
                , disabled
                      <| (not playMode) ||
                         isKo ||
-                        (gs.isFirstMove && hasMoves) ||
-                        otherKo
+                        (gs.isFirstMove && hasMoves)
                , title <| if isKo then
                               "The board is in a position it has been in before. You may not end your turn now."
-                          else if otherKo then
-                              "The other player has no sequence of moves that don't end in Ko. You may not end your turn now."
                           else
                               ""
                ]
         [ text <| if isKo then
                       "Ko"
-                  else if otherKo then
-                      "Other Ko"
                   else
                       "End Turn"
         ]

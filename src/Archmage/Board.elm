@@ -1026,7 +1026,7 @@ isPlayMode mode =
 
 addAnalysis : GameState -> GameState
 addAnalysis gs =
-    if isPlayMode gs.mode then
+    if isPlayMode gs.mode || gs.mode == GameOverMode then
         addAnalysisInternal gs
     else
         { gs | analysis = emptyAnalysis }
@@ -1061,7 +1061,10 @@ addAnalysisInternal gs =
                    ( otherNoMoves ||
                      otherNoNonKoMoves
                    )
-        mode = if gameOver then GameOverMode else gs.mode 
+        mode = if gameOver || gs.mode == GameOverMode then
+                   GameOverMode
+               else
+                   gs.mode 
     in
         { gs
             | analysis = analysis
@@ -1268,6 +1271,10 @@ findPullMove actor nodes =
 --- Ko
 ---
 
+moveString : Move -> String
+moveString { actor, subject, target } =
+    actor.name ++ ": " ++ subject.name ++ " -> " ++ target.name
+
 hasNonKoMoves : Bool -> GameState -> Bool
 hasNonKoMoves useOtherPlayer gs =
     let player = if useOtherPlayer then
@@ -1298,7 +1305,7 @@ hasNonKoMoves useOtherPlayer gs =
                                          if nonKo then
                                              (nonKo, visited3)
                                          else
-                                             inner gs3 tail visited3
+                                             inner gs2 tail visited3
                 )
         loop : GameState -> List String -> (Bool, List String)
         loop = (\gs visited ->
@@ -1313,6 +1320,7 @@ hasNonKoMoves useOtherPlayer gs =
                             in
                                 inner gs moves visited2
                )
+        -- isFirstMove setting here enable True return from isKo
         (res, _) = loop { gs | isFirstMove = False } []
     in
         res      

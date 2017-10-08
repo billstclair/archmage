@@ -494,16 +494,15 @@ placeReq state node =
                         if gs4.subject /= Nothing then
                             Ok gs4
                         else
-                            Ok <| Board.addAnalysis
-                                { gs4
-                                    | mode = ChooseActorMode
-                                    , topList = Board.initialCaptureBoard
-                                    , bottomList = Board.initialCaptureBoard
-                                    , history = [boardToString gs.board]
-                                    , player = WhitePlayer
-                                    , isFirstMove = True
-                                }
-
+                            Ok { gs4
+                                   | mode = ChooseActorMode
+                                   , topList = Board.initialCaptureBoard
+                                   , bottomList = Board.initialCaptureBoard
+                                   , history = [boardToString gs.board]
+                                   , player = WhitePlayer
+                                   , isFirstMove = True
+                               }
+                               
 -- Click on a selected actor during game play.
 -- Store its node in GameState.actor
 selectActorReq : GameState -> String -> Result String GameState
@@ -628,14 +627,11 @@ endTurnReq state =
         analysis = state.analysis
         isKo = analysis.isKo
         noMoves = analysis.noMoves
-        otherNoNonKoMoves = analysis.otherNoNonKoMoves
     in
         if isFirstMove && not noMoves then
             Err "You may not end your turn on the first move unless you have no moves."
         else if isKo then
             Err "You may not end your turn while in Ko."
-        else if otherNoNonKoMoves then
-            Err "You may not end your turn when the other player has no non-Ko moves."
         else
             let gs = { state
                          | player = Types.otherPlayer state.player
@@ -648,7 +644,7 @@ endTurnReq state =
                                      :: state.history
                      }
             in
-                Ok <| Board.addAnalysis gs            
+                Ok gs            
 
 -- Click the "Undo" button during game play.
 -- Revert to the saved GameState.undoState
