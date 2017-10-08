@@ -40,10 +40,10 @@ import Archmage.Server.Interface as Interface
 import ElmChat
 
 import Html exposing ( Html, Attribute , div, h2, text, img, p, a, button, span
-                     , input, table, tr, td
+                     , input, table, tr, td, th
                      )
 import Html.Attributes exposing ( align, src, href, target, style, disabled, title
-                                , type_, size, value, width, checked
+                                , type_, size, value, width, checked, class
                                 )
 import Html.Events exposing ( onClick, onInput, onCheck )
 import Char
@@ -65,13 +65,12 @@ main =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    if not model.isRemote then
+    case model.serverUrl of
+    Nothing ->
         Window.resizes WindowSize
-    else
+    Just url ->
         Sub.batch
-            [ WebSocket.listen
-                  (Interface.getServer model.server)
-                  WebSocketMessage
+            [ WebSocket.listen url WebSocketMessage
             , Window.resizes WindowSize
             ]
 {-
@@ -214,6 +213,8 @@ initialModel =
     , newGameid = ""
     , otherPlayerid = ""
     , chatSettings = Nothing
+    , serverUrl = Nothing
+    , publicGames = Nothing
     }
     
 init : Maybe String -> Maybe Model -> ( Model, Cmd Msg )
@@ -278,9 +279,8 @@ getPlayerid model =
         model.otherPlayerid
 
 connect : String -> Model -> (Model, Cmd Msg)
-connect rawUrl model =
-    let url = String.trim rawUrl
-        server = makeServer url Noop
+connect url model =
+    let server = makeServer url Noop
         rsres = case model.restoreState of
                     "" ->
                         Ok Nothing
@@ -315,9 +315,8 @@ connect rawUrl model =
                 )
 
 join : String -> Model -> (Model, Cmd Msg)
-join rawUrl model =
-    let url = String.trim rawUrl
-        server = makeServer url Noop
+join url model =
+    let server = makeServer url Noop
         gs = initialGameState False
     in
         ( { model
@@ -334,6 +333,21 @@ join rawUrl model =
                                     Nothing -> model.names.black
                                     Just name -> name
                        }
+        )
+
+getPublicGames : Model -> Cmd Msg
+getPublicGames model =
+    if model.isRemote then
+        send model.server GamesReq
+    else
+        Http.send (ReceiveServerUrl fetchPublicGames) getServerText
+
+fetchPublicGames : String -> Model -> (Model, Cmd Msg)
+fetchPublicGames url model =
+    let server = makeServer url Noop
+    in
+        ( model
+        , send server GamesReq
         )
 
 getServerText : Http.Request String
@@ -360,8 +374,10 @@ updateInternal msg model =
                     ( { model | message = Just (toString msg) }
                     , Cmd.none
                     )
-                Ok url ->
-                    handler url model
+                Ok rawUrl ->
+                    let url = String.trim rawUrl
+                    in
+                        handler url { model | serverUrl = Just url }
         SetName name ->
             ( { model | yourName = Just name }
             , Cmd.none
@@ -373,6 +389,16 @@ updateInternal msg model =
         JoinGame ->
             ( model
             , Http.send (ReceiveServerUrl join) getServerText
+            )
+        JoinPublicGame gameid ->
+            ( { model
+                  | newIsRemote = True
+                  , newGameid = gameid
+              }
+            , Cmd.batch
+                [ Http.send (ReceiveServerUrl join) getServerText
+                , Task.perform (\_ -> SetPage GamePage) (Task.succeed 1)
+                ]
             )
         ServerMessage si message ->
             serverMessage si message model
@@ -423,7 +449,10 @@ updateInternal msg model =
                     )
         SetPage page ->
             ( { model | page = page }
-            , Cmd.none
+            , if page /= PublicPage then
+                  Cmd.none
+              else
+                  getPublicGames model
             )
         Undo ->
             ( model
@@ -678,7 +707,8 @@ serverMessage si message model =
                     ChatRsp {gameid, player, text} ->
                         chatRsp mod player text
                     GamesRsp games ->
-                        (mod, Cmd.none)
+                        ( { mod | publicGames = Just games }
+                        , Cmd.none)
                     ErrorRsp { request, text } ->
                         ( { mod | message = Just text }
                         , Cmd.none
@@ -915,10 +945,73 @@ renderHelpPage : Model -> Html Msg
 renderHelpPage model =
     renderIframePage model "docs/help.html"
 
+b : List (Html Msg) -> Html Msg
+b body =
+    Html.b [] body
+
+renderPublicPage : Model -> Html Msg
+renderPublicPage model =
+    div []
+        [ playButton
+        , p []
+            [ button [ onClick <| SetPage PublicPage
+                     , title "Click to refresh game list."
+                     ]
+                  [ text "Refresh" ]
+            ]
+        , case model.publicGames of
+              Nothing ->
+                  p [] [ text "There are no public games." ]
+              Just [] ->
+                  p [] [ text "There are no public games." ]
+              Just games ->
+                  div []
+                      [ p []
+                            [ b [ text "Your name: " ]
+                            , input [ type_ "text"
+                                    , onInput SetName
+                                    , size 16
+                                    , value <| case model.yourName of
+                                                   Nothing -> ""
+                                                   Just name -> name
+                                    ]
+                                  []
+                            ]
+                      , table [ class "bordered" ]
+                          <| List.append
+                              [ tr []
+                                    [ th [] [ text "Player" ]
+                                    , th [] [ text "Play" ]
+                                    ]
+                              ]
+                              (List.map (\{gameid, playerName} ->
+                                            tr []
+                                                [ td [] [ text playerName ]
+                                                , td []
+                                                    [ if model.isRemote &&
+                                                          model.gameid == gameid
+                                                      then
+                                                          text "Your game"
+                                                      else
+                                                          button
+                                                          [ onClick
+                                                                <| JoinPublicGame gameid
+                                                          , title "Click to join game."
+                                                          ]
+                                                          [ text "Join" ]
+                                                    ]
+                                                ]
+                                        )
+                                        games
+                              )
+                         ]
+    , playButton
+    ]
+        
 pages : List (Page, String)
 pages =
     [ ( HelpPage, "Help" )
-    --, ( PublicPage, "Public")
+    , ( PublicPage, "Public")
     , ( RulesPage, "Rules" )
     ]
 
@@ -952,61 +1045,35 @@ pageLinks currentPage model =
               ]
             ]
 
+style_ = Html.node "style"
+
 view : Model -> Html Msg
 view model =
-    let gs = model.gs
-        emptyBoard = Board.isEmptyBoard gs.board
-    in
-        div [ align "center"
-            --deprecated, so sue me
-            ]
-        [ h2 [] [ text "Archmage" ]
-        , p [] [ pageLinks model.page model ]
-        , p []
-            [ case model.message of
-                  Nothing ->
-                      text nbsp
-                  Just m ->
-                      text m
-            ]
-        , case model.page of
-              GamePage ->
-                  renderGamePage model
-              PublicPage ->
-                  text ""
-              RulesPage ->
-                  renderRulesPage model
-              HelpPage ->
-                  renderHelpPage model
-        , p []
-            [ input [ type_ "text"
-                    , onInput <| if not emptyBoard then
-                                     (\_ -> Noop)
-                                 else
-                                     SetRestoreState
-                    , size 60
-                    , if emptyBoard then
-                          title "Enter a saved game to restore it."
-                      else
-                          let gs2 = if gs.mode == SetupMode then
-                                        gs
-                                    else
-                                        { gs
-                                        | actor = Nothing
-                                        , subject = Nothing
-                                        }
-                          in
-                              value <| encodeGameState gs2
-                    ]
-                  []
-            , text " "
-            , button [ onClick RestoreGame
-                     , disabled <| not emptyBoard
-                     ]
-                  [ text "Restore" ]
-            ]
-        , footer
+    div [ align "center"
+        --deprecated, so sue me
         ]
+    [ style_ [ type_ "text/css" ]
+          [ text "@import \"style.css\"" ]
+    , h2 [] [ text "Archmage" ]
+    , p [] [ pageLinks model.page model ]
+    , p []
+        [ case model.message of
+              Nothing ->
+              text nbsp
+              Just m ->
+              text m
+        ]
+    , case model.page of
+          GamePage ->
+              renderGamePage model
+          PublicPage ->
+              renderPublicPage model
+          RulesPage ->
+              renderRulesPage model
+          HelpPage ->
+              renderHelpPage model
+    , footer
+    ]
 
 tableLabelStyle : Attribute Msg
 tableLabelStyle =
@@ -1024,6 +1091,7 @@ renderGamePage model =
         cellSize = renderInfo.cellSize
         locations = renderInfo.locations
         gs = model.gs
+        emptyBoard = Board.isEmptyBoard gs.board
         listCellSize = case gs.mode of
                            JoinMode -> renderInfo.setupCellSize
                            SetupMode -> renderInfo.setupCellSize
@@ -1127,6 +1195,33 @@ renderGamePage model =
                                       ]
                               ]
                           ]
+                ]
+            , p []
+                [ input [ type_ "text"
+                        , onInput <| if not emptyBoard then
+                                         (\_ -> Noop)
+                                     else
+                                         SetRestoreState
+                        , size 60
+                        , if emptyBoard then
+                              title "Enter a saved game to restore it."
+                          else
+                              let gs2 = if gs.mode == SetupMode then
+                                            gs
+                                        else
+                                            { gs
+                                                | actor = Nothing
+                                                , subject = Nothing
+                                            }
+                              in
+                                  value <| encodeGameState gs2
+                        ]
+                      []
+                , text " "
+                , button [ onClick RestoreGame
+                         , disabled <| not emptyBoard
+                     ]
+                  [ text "Restore" ]
                 ]
             ]
 

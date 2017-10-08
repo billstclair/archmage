@@ -195,6 +195,8 @@ type alias Model =
     , newGameid : String
     , otherPlayerid : String
     , chatSettings : Maybe ChatSettings
+    , serverUrl : Maybe String
+    , publicGames : Maybe PublicGames
     }
 
 type TheGameState =
