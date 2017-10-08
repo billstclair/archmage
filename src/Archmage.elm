@@ -956,6 +956,7 @@ renderPublicPage model =
         , p []
             [ button [ onClick <| SetPage PublicPage
                      , title "Click to refresh game list."
+                     , pageLinksStyle
                      ]
                   [ text "Refresh" ]
             ]
