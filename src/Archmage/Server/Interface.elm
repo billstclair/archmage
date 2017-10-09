@@ -232,6 +232,8 @@ processServerMessage state message =
                     (state, err)
                 Ok gameState ->
                     joinReq state gameState message gameid name
+        LeaveReq { playerid } ->
+            leaveReq state message playerid
         UpdateReq { playerid } ->
             doGamePlay state message playerid allModes
                 (\gs -> Ok gs)
@@ -354,6 +356,14 @@ isUpdateReq message =
         _ ->
             False
 
+isLeaveReq : Message -> Bool
+isLeaveReq message =
+    case message of
+        LeaveReq _ ->
+            True
+        _ ->
+            False
+
 doGamePlay : ServerState -> Message -> String -> List Mode -> PlayFun -> (ServerState, Message)
 doGamePlay state message playerid modes playFun =
     case checkPlayerid state message playerid of
@@ -370,7 +380,9 @@ doGamePlay state message playerid modes playFun =
                                     , gameState = gameState
                                     }
                         )
-                    else if player /= gameState.player then
+                    else if player /= gameState.player &&
+                         not (isLeaveReq message)
+                    then
                         (state, errorRsp message "Wrong player.")
                     else
                         case playFun gameState of
@@ -439,6 +451,22 @@ joinReq state gameState message gameid name =
               }
     in
         (st2, msg)
+
+leaveReq : ServerState -> Message -> String -> (ServerState, Message)
+leaveReq state message playerid =
+    case checkPlayerid state message playerid of
+        Err err ->
+            (state, err)
+        Ok {gameid, player} ->
+            let st2 = { state
+                          | gameDict = Dict.remove gameid state.gameDict
+                          , playerDict = Dict.remove playerid state.playerDict
+                          , publicGames =
+                            removeGameFromList state.publicGames gameid
+                      }
+                msg = LeaveRsp { gameid = gameid }
+            in
+                (st2, msg)
 
 playerList : GameState -> Board
 playerList gs =

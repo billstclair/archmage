@@ -469,6 +469,12 @@ parseRequest msg params rawMessage =
                             JoinReq { gameid = gid
                                     , name = n
                                     }
+        "leave" ->
+            case params.playerid of
+                Nothing ->
+                    rawMessage
+                Just pid ->
+                    LeaveReq { playerid = pid }
         "update" ->
             case params.playerid of
                 Nothing ->
@@ -607,6 +613,12 @@ parseResponse msg params rawMessage =
                                             , names = ns
                                             , gameState = gs
                                             }
+        "leave" ->
+            case params.gameid of
+                Nothing ->
+                    rawMessage
+                Just gid ->
+                    LeaveRsp { gameid = gid }
         -- Generic responses
         "update" ->
             case params.gameid of
@@ -862,6 +874,8 @@ messageEncoder message =
                 , ("name", name) ]
         JoinReq { gameid, name } ->
             messageValue "req" "join" [ ("gameid", gameid), ("name", name) ]
+        LeaveReq { playerid } ->
+            messageValue "req" "leave" [ ("playerid", playerid) ]
         UpdateReq { playerid } ->
             messageValue "req" "update" [ ("playerid", playerid) ]
         JoinRsp { playerid, names, gameState } ->
@@ -870,6 +884,8 @@ messageEncoder message =
                 , ("names", encodePlayerNames names)
                 , ("gameState", encodeGameState gameState)
                 ]
+        LeaveRsp { gameid } ->
+            messageValue "rsp" "leave" [ ("gameid", gameid) ]
         -- Generic respones
         UpdateRsp { gameid, gameState } ->
             messageValue "rsp" "update"

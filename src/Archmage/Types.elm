@@ -58,26 +58,23 @@ type alias ChatSettings =
     ElmChat.Settings Msg
 
 type Msg
-    = ServerMessage (ServerInterface Msg) Message
+    = NewGame
+    | ReceiveServerUrl (String -> Model -> (Model, Cmd Msg)) (Result Http.Error String)
+    | SetName String
+    | SetGameid String
+    | JoinGame
+    | JoinPublicGame String
+    | ServerMessage (ServerInterface Msg) Message
     | WebSocketMessage String
     | ChatUpdate ChatSettings (Cmd Msg)
     | ChatSend String ChatSettings
-    | SetName String
-    | SetGameid String
-    | ReceiveServerUrl (String -> Model -> (Model, Cmd Msg)) (Result Http.Error String)
-    | NewGame
     | SetIsRemote Bool
     | SetIsPublic Bool
     | SetRestoreState String
     | RestoreGame
-    | JoinGame
-    | JoinPublicGame String
-    | ResignGame
-    | SetInput Int String
-    | NodeClick ClickKind WhichBoard Node
     | SetPage Page
-    | RefreshPublicGames
     | Undo
+    | NodeClick ClickKind WhichBoard Node
     | WindowSize Window.Size
     | Noop
 
@@ -410,6 +407,8 @@ type Message
                 , names : PlayerNames
                 , gameState : GameState
                 }
+      | LeaveReq { playerid : String }
+      | LeaveRsp { gameid : String }
       -- Sent as response to most commands
       | UpdateReq { playerid : String }
       | UpdateRsp { gameid : String
@@ -457,8 +456,6 @@ type alias PlayerInfo =
 -- You might think that the names are per game, and you'd be right to think that.
 -- They're not in the GameState, because they don't need to go over the wire,
 -- except in the JoinRsp.
--- So I'm relying on the fact that Node.js is single-threaded to stash them there
--- during the NewReq and JoinReq calls.
 -- They're stored in a Dict in the Server model.
 type alias ServerState =
     { gameDict : Dict String GameState --gameid -> GameState

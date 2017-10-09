@@ -145,6 +145,10 @@ setMessage model =
                         Just msg ->
                             { model | message = Just msg }
 
+otherPlayerName : Model -> String
+otherPlayerName model =
+    playerName (otherPlayer model.you) model
+
 setMessageInternal : Model -> GameState -> String -> Model
 setMessageInternal model gs message =
     let c = if model.isRemote then
@@ -183,7 +187,7 @@ setMessageInternal model gs message =
                                               { gs | player = model.you }
                                     in
                                         gs2.analysis
-                          other = playerName (otherPlayer model.you) model
+                          other = otherPlayerName model
                       in
                           if an.noNonKoMoves then
                               if an.otherNoNonKoMoves then
@@ -360,20 +364,63 @@ getServerText : Http.Request String
 getServerText =
     Http.getString "server.txt"
 
+restoreGame : Model -> ( Model, Cmd Msg )
+restoreGame model =
+    case decodeGameState model.restoreState of
+        Err msg ->
+            ( { model | message = Just msg }
+            , Cmd.none
+            )
+        Ok gs ->
+            if model.newIsRemote then
+                ( model
+                , Http.send (ReceiveServerUrl
+                                 <| restoreTheGame (Just gs)
+                            )
+                    getServerText
+                )
+            else
+                ( { model | you = WhitePlayer }
+                , send model.server
+                    <| NewReq { name = model.names.white
+                              , isPublic = False
+                              , restoreState = Just gs
+                              }
+                )
+
+maybeLeave : Model -> Msg -> Maybe ( Model, Cmd Msg )
+maybeLeave model msg =
+    if model.isRemote && model.playerid /= "" then
+        Just ( { model
+                   | gameid = ""
+                   , playerid = ""
+               }
+             , Cmd.batch
+                 [ Task.perform (\_ -> msg) <| Task.succeed ()
+                 , send model.server <| LeaveReq { playerid = model.playerid }
+                 ]
+             )
+    else
+        Nothing
+
 updateInternal : Msg -> Model -> ( Model, Cmd Msg )
 updateInternal msg model =
     case msg of
         NewGame ->
-            if model.newIsRemote then
-                ( model
-                , Http.send (ReceiveServerUrl connect) getServerText
-                )
-            else
-                let (mod, cmd) = init model.yourName Nothing
-                in
-                    ( { mod | newIsRemote = False }
-                    , cmd
-                    )
+            case maybeLeave model NewGame of
+                Just res ->
+                    res
+                Nothing ->
+                    if model.newIsRemote then
+                        ( model
+                        , Http.send (ReceiveServerUrl connect) getServerText
+                        )
+                    else
+                        let (mod, cmd) = init model.yourName Nothing
+                        in
+                            ( { mod | newIsRemote = False }
+                            , cmd
+                            )
         ReceiveServerUrl handler result ->
             case result of
                 Err msg ->
@@ -440,27 +487,11 @@ updateInternal msg model =
             , Cmd.none
             )
         RestoreGame ->
-            case decodeGameState model.restoreState of
-                Err msg ->
-                    ( { model | message = Just msg }
-                    , Cmd.none
-                    )
-                Ok gs ->
-                    if model.newIsRemote then
-                        ( model
-                        , Http.send (ReceiveServerUrl
-                                         <| restoreTheGame (Just gs)
-                                    )
-                            getServerText
-                        )
-                    else
-                        ( { model | you = WhitePlayer }
-                        , send model.server
-                            <| NewReq { name = model.names.white
-                                      , isPublic = False
-                                      , restoreState = Just gs
-                                  }
-                    )
+            case maybeLeave model RestoreGame of
+                Just res ->
+                    res
+                Nothing ->
+                    restoreGame model
         SetPage page ->
             ( { model | page = page }
             , if page /= PublicPage then
@@ -700,6 +731,20 @@ serverMessage si message model =
                               }
                             , Cmd.none
                             )
+                    LeaveRsp { gameid } ->
+                        ( if gameid == model.gameid then
+                              { model
+                                  | gameid = ""
+                                  , playerid = ""
+                                  , message = Just
+                                              <| "Game Over! " ++
+                                                  (otherPlayerName model) ++
+                                                  " left."
+                              }
+                          else
+                              model
+                        , Cmd.none
+                        )
                     UpdateRsp { gameState } ->
                         let gs = if model.isRemote then
                                      Board.addAnalysis gameState

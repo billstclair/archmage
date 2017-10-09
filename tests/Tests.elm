@@ -94,6 +94,8 @@ protocolData =
                         }
               , gameState = Board.initialGameState True
               }
+    , LeaveReq { playerid = "p1" }
+    , LeaveRsp { gameid = "asdf" }
     , UpdateReq { playerid = "p1" }
     , UpdateRsp { gameid = "asdf"
                 , gameState = Board.initialGameState True

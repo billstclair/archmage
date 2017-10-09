@@ -405,6 +405,26 @@ processResponse model socket state message response =
                                sendToOne whiteRsp s
                      ]
                  )
+        LeaveRsp { gameid } ->
+            -- game is already removed from state.gameDict & state.publicGames
+            -- one playerid is removed from state.playerDict
+            let sockets = case Dict.get gameid model.socketsDict of
+                              Nothing -> []
+                              Just socks -> socks
+                pids = case Dict.get gameid model.playeridDict of
+                           Nothing -> []
+                           Just ids -> ids
+                gameidDict = List.foldr Dict.remove model.gameidDict sockets
+                playerDict = List.foldr Dict.remove state.playerDict pids
+            in
+                ( { model
+                      | socketsDict = Dict.remove gameid model.socketsDict
+                      , playeridDict = Dict.remove gameid model.playeridDict
+                      , gameidDict = gameidDict
+                      , state = { state | playerDict = playerDict }
+                  }
+                , sendToMany response sockets
+                )
         ErrorRsp _ ->
             ( model
             , sendToOne response socket
